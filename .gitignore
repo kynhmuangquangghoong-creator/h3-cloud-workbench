@@ -1,0 +1,7 @@
+.wrangler/
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+*.log
+workflows/h3_relay/h3_relay_bundle.zip

@@ -1,0 +1,55 @@
+{
+  "workflow_id": "h3_relay",
+  "version": "v1",
+  "title": "MiniMax H3 无限流接力 (Goldfish Relay)",
+  "description": "1:1 复刻本机 5090 金鱼二采 + 潜在空间多段接力，支持 2–8 段连续音画生成。",
+  "bundle_key": "workflows/h3_relay/h3_relay_bundle.zip",
+  "required_models": [
+    "h3_hybrid_int8",
+    "qwen3vl_32b_nvfp4",
+    "h3_video_vae_int8",
+    "h3_audio_vae_fp32",
+    "h3_latent_upscaler_3d_bf16",
+    "h3_upscaler_lms_v01",
+    "h3_lora_dmad_v4",
+    "h3_lora_mystic_v1"
+  ],
+  "params_schema": {
+    "resolution": {
+      "type": "select",
+      "label": "输出分辨率",
+      "options": ["1344x768", "2048x1152"],
+      "default": "1344x768"
+    },
+    "seed": {
+      "type": "integer",
+      "label": "随机种子 (-1 随机)",
+      "default": -1
+    },
+    "audio": {
+      "type": "boolean",
+      "label": "生成同步音频",
+      "default": true
+    },
+    "prompts": {
+      "type": "string_array",
+      "label": "分段提示词 (2-8 段)",
+      "min_items": 2,
+      "max_items": 8
+    },
+    "images": {
+      "type": "file_array",
+      "label": "参考图 / 关键帧 (1-9 张)",
+      "accept": ".png,.jpg,.jpeg,.webp",
+      "min_items": 1,
+      "max_items": 9
+    },
+    "audios": {
+      "type": "file_array",
+      "label": "参考音色音频 (0-3 段，可选)",
+      "accept": ".wav,.mp3,.flac,.m4a,.ogg",
+      "min_items": 0,
+      "max_items": 3
+    }
+  }
+}

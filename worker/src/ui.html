@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>H3 云端 GPU 工作台 · Zero-Volume</title>
+<style>
+  :root {
+    --bg: #0c0e14; --panel: #141824; --border: #252b3d; --text: #e6ebf5;
+    --muted: #8b95ad; --accent: #38bdf8; --ok: #22c55e; --warn: #f59e0b; --err: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 14px 22px; border-bottom: 1px solid var(--border); background: #10131d; }
+  header h1 { margin: 0; font-size: 17px; letter-spacing: 0.4px; }
+  .badge { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: #1e293b; color: var(--accent); margin-left: 8px; }
+  .token-bar { display: flex; gap: 8px; align-items: center; }
+  .token-bar input { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 6px; width: 220px; }
+  .layout { display: grid; grid-template-columns: 400px 1fr; gap: 18px; padding: 18px 22px; max-width: 1440px; margin: 0 auto; }
+  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 14px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+  input[type="text"], input[type="number"], select, textarea {
+    width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 10px; border-radius: 8px; font-size: 13px; font-family: inherit;
+  }
+  textarea { min-height: 110px; resize: vertical; line-height: 1.5; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  button {
+    background: var(--accent); color: #08101c; border: none; padding: 9px 14px; border-radius: 8px;
+    font-weight: 600; cursor: pointer; font-size: 13px;
+  }
+  button:hover { filter: brightness(1.08); }
+  button.danger { background: var(--err); color: #fff; padding: 5px 10px; font-size: 12px; }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 6px 10px; }
+  .job-item { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; background: #101420; }
+  .job-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+  .st-queued, .st-uploading { background: #334155; color: #cbd5e1; }
+  .st-running { background: rgba(56,189,248,0.18); color: var(--accent); }
+  .st-completed { background: rgba(34,197,94,0.18); color: var(--ok); }
+  .st-failed { background: rgba(239,68,68,0.18); color: var(--err); }
+  .bar { height: 6px; background: #1e2436; border-radius: 999px; overflow: hidden; margin: 8px 0; }
+  .bar > div { height: 100%; background: linear-gradient(90deg, #38bdf8, #818cf8); transition: width 0.3s; }
+  .meta { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+  video { width: 100%; max-height: 360px; border-radius: 8px; margin-top: 10px; background: #000; }
+  .pod-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; font-size: 12px; }
+  pre.err { background: #1f1215; color: #fca5a5; padding: 8px; border-radius: 6px; font-size: 11px; overflow-x: auto; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>H3 云端 GPU 工作台 <span class="badge">零热卷 · \$0 固定月费</span></h1>
+  </div>
+  <div class="token-bar">
+    <input id="tokenInput" type="password" placeholder="输入访问 Token" />
+    <button class="ghost" onclick="saveToken()">保存并刷新</button>
+  </div>
+</header>
+
+<div class="layout">
+  <div>
+    <div class="card">
+      <h2>新建 H3 接力任务</h2>
+      <label>任务标题</label>
+      <input id="title" type="text" placeholder="例如：雨夜霓虹机甲_01" />
+
+      <div class="row">
+        <div>
+          <label>算力平台</label>
+          <select id="platform">
+            <option value="runpod">Runpod (零热卷自动开卡)</option>
+            <option value="colab">Colab Pro+ (消费月费余额)</option>
+            <option value="local5090">本机 5090</option>
+          </select>
+        </div>
+        <div>
+          <label>Runpod 机型偏好</label>
+          <select id="gpuPref">
+            <option value="auto">自动优选 (5090→A100→6000)</option>
+            <option value="rtx5090">RTX 5090 ($0.69/hr 起)</option>
+            <option value="a100">A100 SXM 80GB ($1.39/hr 起)</option>
+            <option value="pro6000">RTX PRO 6000 96GB</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>分辨率</label>
+          <select id="resolution">
+            <option value="1344x768">1344 × 768 (768p 推荐)</option>
+            <option value="2048x1152">2048 × 1152 (2K)</option>
+          </select>
+        </div>
+        <div>
+          <label>随机种子 (-1 随机)</label>
+          <input id="seed" type="number" value="-1" />
+        </div>
+      </div>
+
+      <label>分段提示词（每行 1 段，2–8 段接力）</label>
+      <textarea id="prompts" placeholder="第 1 段镜头提示词与台词&#10;第 2 段镜头提示词与台词"></textarea>
+
+      <label>参考图 / 关键帧（1–9 张，直传 R2）</label>
+      <input id="imgFiles" type="file" accept=".png,.jpg,.jpeg,.webp" multiple />
+
+      <label>参考音色音频（0–3 段，可选）</label>
+      <input id="audFiles" type="file" accept=".wav,.mp3,.flac,.m4a,.ogg" multiple />
+
+      <div style="margin-top:14px; display:flex; gap:10px; align-items:center;">
+        <button id="submitBtn" onclick="submitJob()">提交并启动生成</button>
+        <span id="submitMsg" style="font-size:12px; color:var(--muted);"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>活跃 Runpod 实例 & 看门狗</h2>
+      <div id="podsBox" style="font-size:12px; color:var(--muted);">加载中...</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>实时队列与成片预览（每 4 秒自动刷新）</h2>
+      <div id="jobsBox" style="font-size:13px; color:var(--muted);">请先在右上角输入 Token</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let TOKEN = localStorage.getItem("gpu_wb_token") || "";
+$("tokenInput").value = TOKEN;
+
+function saveToken() {
+  TOKEN = $("tokenInput").value.trim();
+  localStorage.setItem("gpu_wb_token", TOKEN);
+  refresh();
+}
+
+async function api(path, opts = {}) {
+  const headers = Object.assign({ Authorization: "Bearer " + TOKEN }, opts.headers || {});
+  const r = await fetch(path, Object.assign({}, opts, { headers }));
+  if (!r.ok) throw new Error("HTTP " + r.status + ": " + (await r.text()));
+  return r.json();
+}
+
+async function submitJob() {
+  const imgs = Array.from($("imgFiles").files || []);
+  const auds = Array.from($("audFiles").files || []);
+  const prompts = $("prompts").value.split("\n").map(s => s.trim()).filter(Boolean);
+  if (!imgs.length) return alert("请至少选择 1 张参考图片");
+  if (!prompts.length) return alert("请输入至少 1 行分段提示词");
+
+  $("submitBtn").disabled = true;
+  $("submitMsg").textContent = "创建任务中...";
+  try {
+    const created = await api("/api/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: $("title").value.trim() || "H3_" + new Date().toLocaleTimeString(),
+        platform: $("platform").value,
+        gpu_preference: $("gpuPref").value,
+        workflow: "h3_relay",
+        workflow_version: "v1",
+        params: {
+          resolution: $("resolution").value,
+          seed: Number($("seed").value || -1),
+          audio: true,
+          prompts,
+        },
+      }),
+    });
+    const allFiles = [...imgs, ...auds];
+    for (let i = 0; i < allFiles.length; i++) {
+      const f = allFiles[i];
+      $("submitMsg").textContent = `直传素材 ${i + 1}/${allFiles.length}: ${f.name}`;
+      await fetch(`/api/jobs/${encodeURIComponent(created.id)}/input/${encodeURIComponent(f.name)}`, {
+        method: "PUT",
+        headers: { Authorization: "Bearer " + TOKEN, "Content-Type": f.type || "application/octet-stream" },
+        body: f,
+      });
+    }
+    $("submitMsg").textContent = "入队并唤醒算力...";
+    const enq = await api(`/api/jobs/${encodeURIComponent(created.id)}/enqueue`, { method: "POST" });
+    $("submitMsg").textContent = enq.pod_launch?.launched
+      ? `已开卡 ${enq.pod_launch.pod_id} (${enq.pod_launch.gpu_type})`
+      : "已入队等待 Worker 领取";
+    refresh();
+  } catch (e) {
+    $("submitMsg").textContent = "提交失败: " + e.message;
+  } finally {
+    $("submitBtn").disabled = false;
+  }
+}
+
+async function killPod(podId) {
+  if (!confirm(`确定立即销毁 Runpod 实例 ${podId} 并停表？`)) return;
+  await api(`/api/pods/${encodeURIComponent(podId)}`, { method: "DELETE" });
+  refresh();
+}
+
+async function refresh() {
+  if (!TOKEN) return;
+  try {
+    const data = await api("/api/overview");
+    // Pods
+    if (!data.pods.length) {
+      $("podsBox").innerHTML = "当前无 Runpod 实例（0 计费）";
+    } else {
+      $("podsBox").innerHTML = data.pods.map(p => `
+        <div class="pod-row">
+          <div>
+            <b>${p.pod_id}</b> · ${p.gpu_type} (${p.cloud_type})<br/>
+            <span style="color:var(--muted)">状态: ${p.status} · $${p.hourly_price}/hr · ${p.terminate_reason || "运行/启动中"}</span>
+          </div>
+          ${p.status !== "terminated" ? `<button class="danger" onclick="killPod('${p.pod_id}')">立即销毁</button>` : ""}
+        </div>
+      `).join("");
+    }
+    // Jobs
+    if (!data.jobs.length) {
+      $("jobsBox").innerHTML = "暂无任务。在左侧提交你的第一条 H3 接力任务吧。";
+    } else {
+      $("jobsBox").innerHTML = data.jobs.map(j => {
+        const pct = Math.round((j.progress || 0) * 100);
+        let tel = {};
+        try { tel = JSON.parse(j.telemetry_json || "{}"); } catch {}
+        const vram = tel.vram_total_mb ? `显存 ${Math.round(tel.vram_used_mb/1024)}/${Math.round(tel.vram_total_mb/1024)} GB` : "";
+        const videoHtml = j.preview_key
+          ? `<video controls preload="metadata" src="/api/assets/${encodeURIComponent(j.preview_key)}?token=${encodeURIComponent(TOKEN)}"></video>`
+          : "";
+        const errHtml = j.error_msg ? `<pre class="err">${j.error_msg}</pre>` : "";
+        return `
+          <div class="job-item">
+            <div class="job-head">
+              <div><b>${j.title}</b> <span style="font-size:11px;color:var(--muted)">(${j.id})</span></div>
+              <span class="pill st-${j.status}">${j.status} · ${j.stage || j.phase}</span>
+            </div>
+            <div class="bar"><div style="width:${pct}%"></div></div>
+            <div class="meta">
+              <span>平台: ${j.platform}</span>
+              <span>进度: ${pct}%</span>
+              ${vram ? `<span>${vram}</span>` : ""}
+              ${j.pod_id ? `<span>Pod: ${j.pod_id}</span>` : ""}
+              <span>${j.detail || ""}</span>
+            </div>
+            ${videoHtml}
+            ${errHtml}
+          </div>
+        `;
+      }).join("");
+    }
+  } catch (e) {
+    $("jobsBox").innerHTML = `<span style="color:var(--err)">连接失败：${e.message}</span>`;
+  }
+}
+
+refresh();
+setInterval(refresh, 4000);
+</script>
+</body>
+</html>

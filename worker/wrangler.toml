@@ -1,0 +1,29 @@
+name = "gpu-workbench"
+main = "src/worker.js"
+compatibility_date = "2026-11-01"
+account_id = "a87f9319ee61c232f1b24da398a4f17b"
+workers_dev = true
+
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "console-db"
+database_id = "81214707-5610-42b4-a90f-35b143f20fe4"
+
+[[r2_buckets]]
+binding = "GPU_JOBS"
+bucket_name = "gpu-jobs"
+
+[vars]
+# Update this after pushing your GHCR image (option A).
+# If left empty or set to "runpod/pytorch:...", worker falls back to inline bootstrap.
+RUNPOD_IMAGE_NAME = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
+POD_MAX_RUNTIME_MIN = "90"
+POD_STALE_HEARTBEAT_MIN = "15"
+
+[triggers]
+crons = ["*/10 * * * *"]
