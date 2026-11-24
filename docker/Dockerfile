@@ -6,6 +6,7 @@ FROM runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
+    PIP_BREAK_SYSTEM_PACKAGES=1 \
     COMFY_DIR=/opt/ComfyUI \
     WORKBENCH_DIR=/opt/workbench \
     HF_XET_HIGH_PERFORMANCE=1 \
@@ -15,9 +16,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git ffmpeg aria2 curl unzip rclone libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# 1. Clone ComfyUI & install core dependencies
+# 1. Clone ComfyUI & install core dependencies (keep base PyTorch 2.8 + CUDA 12.8 untouched)
 RUN git clone --depth 1 https://github.com/comfyanonymous/ComfyUI.git ${COMFY_DIR} \
-    && pip install --upgrade pip \
     && pip install -r ${COMFY_DIR}/requirements.txt \
     && pip install av huggingface_hub hf_transfer websocket-client requests
 
