@@ -28,18 +28,28 @@ function checkAuth(request, env) {
 }
 
 const GPU_PRIORITY_MAP = {
-  "auto": [
+  "video_auto": [
     { id: "NVIDIA GeForce RTX 5090", cloud: "COMMUNITY", price: 0.69 },
+    { id: "NVIDIA A100 80GB PCIe", cloud: "COMMUNITY", price: 1.19 },
     { id: "NVIDIA A100-SXM4-80GB", cloud: "COMMUNITY", price: 1.39 },
     { id: "NVIDIA RTX PRO 6000 Blackwell Server Edition", cloud: "COMMUNITY", price: 1.69 },
+    { id: "NVIDIA RTX PRO 4500", cloud: "COMMUNITY", price: 0.34 },
     { id: "NVIDIA GeForce RTX 5090", cloud: "SECURE", price: 1.39 },
     { id: "NVIDIA A100-SXM4-80GB", cloud: "SECURE", price: 2.19 },
+  ],
+  "audio_auto": [
+    { id: "NVIDIA RTX PRO 4500", cloud: "COMMUNITY", price: 0.34 },
+    { id: "NVIDIA GeForce RTX 4090", cloud: "COMMUNITY", price: 0.34 },
+    { id: "NVIDIA RTX PRO 4000", cloud: "COMMUNITY", price: 0.50 },
+    { id: "NVIDIA GeForce RTX 5090", cloud: "COMMUNITY", price: 0.69 },
+    { id: "NVIDIA A100 80GB PCIe", cloud: "COMMUNITY", price: 1.19 },
   ],
   "rtx5090": [
     { id: "NVIDIA GeForce RTX 5090", cloud: "COMMUNITY", price: 0.69 },
     { id: "NVIDIA GeForce RTX 5090", cloud: "SECURE", price: 1.39 },
   ],
   "a100": [
+    { id: "NVIDIA A100 80GB PCIe", cloud: "COMMUNITY", price: 1.19 },
     { id: "NVIDIA A100-SXM4-80GB", cloud: "COMMUNITY", price: 1.39 },
     { id: "NVIDIA A100-SXM4-80GB", cloud: "SECURE", price: 2.19 },
   ],
@@ -61,7 +71,7 @@ function buildInlineBootstrapCmd(origin) {
       "if [ ! -d /opt/ComfyUI ]; then git clone --depth 1 https://github.com/comfyanonymous/ComfyUI.git /opt/ComfyUI; fi",
       "pip install -q -r /opt/ComfyUI/requirements.txt av huggingface_hub hf_transfer websocket-client requests",
       "cd /opt/ComfyUI/custom_nodes",
-      "for repo in 'facok/comfyui-SelfLift' 'goohai/Goohaitools-comfyui' 'kijai/ComfyUI-KJNodes' 'Kosinkadink/ComfyUI-VideoHelperSuite'; do " +
+      "for repo in 'facok/comfyui-SelfLift' 'goohai/Goohaitools-comfyui' 'kijai/ComfyUI-KJNodes' 'Kosinkadink/ComfyUI-VideoHelperSuite' 'smthemex/ComfyUI_Demucs' 'shinrali/ComfyUI-Qwen3-TTS' '1038lab/ComfyUI-QwenASR'; do " +
         "name=${repo#*/}; [ -d \"$name\" ] || git clone --depth 1 \"https://github.com/${repo}.git\" \"$name\"; " +
         "[ -f \"$name/requirements.txt\" ] && pip install -q -r \"$name/requirements.txt\" || true; done",
       "mkdir -p /opt/workbench",
@@ -71,7 +81,50 @@ function buildInlineBootstrapCmd(origin) {
   ];
 }
 
-async function launchRunpodPod(env, origin, gpuPrefKey = "auto") {
+async function runpodMcpCall(env, toolName, argsObj) {
+  const resp = await fetch("https://mcp.runpod.io/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+      Authorization: `Bearer ${env.RUNPOD_API_KEY}`,
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: Date.now() % 100000,
+      method: "tools/call",
+      params: { name: toolName, arguments: argsObj },
+    }),
+    signal: AbortSignal.timeout(20000),
+  });
+  const rawText = await resp.text();
+  let parsed = null;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    // Handle SSE response lines if mcp.runpod.io streams data: {...}
+    for (const ln of rawText.split("\n")) {
+      if (ln.startsWith("data:")) {
+        try {
+          parsed = JSON.parse(ln.slice(5).trim());
+        } catch {}
+      }
+    }
+  }
+  const contentText = parsed?.result?.content?.[0]?.text || "";
+  const isErr = Boolean(parsed?.error || parsed?.result?.isError || !resp.ok);
+  let inner = null;
+  if (contentText) {
+    try {
+      inner = JSON.parse(contentText);
+    } catch {
+      inner = { text: contentText };
+    }
+  }
+  return { ok: !isErr, status: resp.status, data: inner, raw: contentText || rawText.slice(0, 300) };
+}
+
+async function launchRunpodPod(env, origin, gpuPrefKey = "auto", workflow = "h3_relay") {
   if (!env.RUNPOD_API_KEY) {
     return { launched: false, reason: "RUNPOD_API_KEY secret not configured on Worker" };
   }
@@ -84,55 +137,48 @@ async function launchRunpodPod(env, origin, gpuPrefKey = "auto") {
     return { launched: false, reused: true, pod_id: existing.pod_id, gpu_type: existing.gpu_type };
   }
 
-  const imageName = (env.RUNPOD_IMAGE_NAME || "").trim() || "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04";
+  const imageName = (env.RUNPOD_IMAGE_NAME || "").trim() || "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404";
   const isCustomImage = imageName.includes("h3-cloud-workbench");
-  const candidates = GPU_PRIORITY_MAP[gpuPrefKey] || GPU_PRIORITY_MAP.auto;
+  const resolvedKey = gpuPrefKey === "auto" ? (String(workflow || "").startsWith("audio_") ? "audio_auto" : "video_auto") : gpuPrefKey;
+  const candidates = GPU_PRIORITY_MAP[resolvedKey] || GPU_PRIORITY_MAP.video_auto;
   const errors = [];
 
   for (const cand of candidates) {
     const body = {
       name: `h3-worker-${Date.now().toString(36)}`,
-      imageName,
-      cloudType: cand.cloud,
-      computeType: "GPU",
-      gpuCount: 1,
-      gpuTypeIds: [cand.id],
-      minCudaVersion: "12.8",
-      containerDiskInGb: 90,
-      volumeInGb: 0,
+      image: imageName,
+      cloud: cand.cloud,
+      disk: 90,
+      gpu: {
+        id: cand.id,
+        count: 1,
+        minCudaVersion: "12.8",
+      },
       env: {
         WORKER_PLATFORM: "runpod",
         CONTROL_PLANE_URL: origin,
         WORKER_TOKEN: env.WORKER_TOKEN || "",
         HF_TOKEN: "{{ RUNPOD_SECRET_HF_TOKEN }}",
-        IDLE_SHUTDOWN_SEC: "180",
+        IDLE_SHUTDOWN_SEC: "10",
+        EXIT_ON_IDLE: "1",
       },
     };
     if (!isCustomImage) {
-      body.dockerStartCmd = buildInlineBootstrapCmd(origin);
+      body.entrypoint = buildInlineBootstrapCmd(origin);
     }
 
-    const resp = await fetch("https://api.runpod.io/v2/pods", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${env.RUNPOD_API_KEY}`,
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (resp.ok) {
-      const pod = await resp.json();
+    const res = await runpodMcpCall(env, "create-pod", { body });
+    const podId = res.data?.id || res.data?.pod?.id;
+    if (res.ok && podId) {
       const ts = nowIso();
       await env.DB.prepare(
         "INSERT OR REPLACE INTO gpu_pods (pod_id, gpu_type, cloud_type, status, hourly_price, created_at, last_heartbeat_at) VALUES (?, ?, ?, 'starting', ?, ?, ?)"
       )
-        .bind(pod.id, cand.id, cand.cloud, cand.price, ts, ts)
+        .bind(podId, cand.id, cand.cloud, cand.price, ts, ts)
         .run();
-      return { launched: true, pod_id: pod.id, gpu_type: cand.id, cloud_type: cand.cloud, hourly_price: cand.price };
+      return { launched: true, pod_id: podId, gpu_type: cand.id, cloud_type: cand.cloud, hourly_price: cand.price };
     }
-    const errText = await resp.text();
-    errors.push(`${cand.id} (${cand.cloud}): HTTP ${resp.status} ${errText.slice(0, 160)}`);
+    errors.push(`${cand.id} (${cand.cloud}): HTTP ${res.status} ${String(res.raw || "").slice(0, 180)}`);
   }
 
   return { launched: false, reason: "No GPU stock matched", errors };
@@ -142,11 +188,9 @@ async function terminateRunpodPod(env, podId, reason = "manual") {
   if (!env.RUNPOD_API_KEY) {
     return { ok: false, error: "RUNPOD_API_KEY not configured" };
   }
-  const resp = await fetch(`https://api.runpod.io/v2/pods/${encodeURIComponent(podId)}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${env.RUNPOD_API_KEY}` },
-  });
-  const ok = resp.ok || resp.status === 404;
+  const res = await runpodMcpCall(env, "delete-pod", { id: podId });
+  const notFound = String(res.raw || "").toLowerCase().includes("not found") || res.status === 404;
+  const ok = res.ok || notFound;
   if (ok) {
     await env.DB.prepare(
       "UPDATE gpu_pods SET status = 'terminated', terminated_at = ?, terminate_reason = ? WHERE pod_id = ?"
@@ -154,12 +198,31 @@ async function terminateRunpodPod(env, podId, reason = "manual") {
       .bind(nowIso(), reason, podId)
       .run();
   }
-  return { ok, status: resp.status };
+  return { ok, status: res.status, detail: res.raw };
+}
+
+async function purgeJobData(env, jobId) {
+  const prefix = `jobs/${jobId}/`;
+  let cursor = undefined;
+  let deletedObjects = 0;
+  while (true) {
+    const listed = await env.GPU_JOBS.list({ prefix, cursor, limit: 1000 });
+    const keys = (listed.objects || []).map((o) => o.key);
+    if (keys.length > 0) {
+      await env.GPU_JOBS.delete(keys);
+      deletedObjects += keys.length;
+    }
+    if (!listed.truncated || !listed.cursor) break;
+    cursor = listed.cursor;
+  }
+  await env.DB.prepare("DELETE FROM gpu_jobs WHERE id = ?").bind(jobId).run();
+  return { ok: true, job_id: jobId, deleted_objects: deletedObjects };
 }
 
 async function runWatchdog(env) {
   const maxRunMin = Number(env.POD_MAX_RUNTIME_MIN || "90");
   const staleHbMin = Number(env.POD_STALE_HEARTBEAT_MIN || "15");
+  const retentionHours = Number(env.JOB_RETENTION_HOURS || "24");
   const active = await env.DB.prepare(
     "SELECT pod_id, created_at, last_heartbeat_at FROM gpu_pods WHERE status IN ('starting','running')"
   ).all();
@@ -177,7 +240,20 @@ async function runWatchdog(env) {
       killed.push({ pod_id: row.pod_id, reason: "stale_heartbeat" });
     }
   }
-  return killed;
+
+  // Privacy safety net: auto-purge finished jobs & R2 files older than retentionHours
+  const finished = await env.DB.prepare(
+    "SELECT id, completed_at, updated_at FROM gpu_jobs WHERE status IN ('completed','failed')"
+  ).all();
+  const purged = [];
+  for (const row of finished.results || []) {
+    const refTs = Date.parse(row.completed_at || row.updated_at || "");
+    if (!Number.isNaN(refTs) && (now - refTs) / 3600000 > retentionHours) {
+      await purgeJobData(env, row.id);
+      purged.push(row.id);
+    }
+  }
+  return { killed, purged };
 }
 
 export default {
@@ -228,6 +304,57 @@ export default {
         image_name: env.RUNPOD_IMAGE_NAME || "",
         runpod_ready: Boolean(env.RUNPOD_API_KEY),
       });
+    }
+
+    // 2.5 Live Runpod GPU availability & pricing catalog (for compute fleet cockpit)
+    if (request.method === "GET" && path === "/api/runpod/catalog") {
+      if (!env.RUNPOD_API_KEY) return jsonResp({ gpus: [], balance: null, error: "RUNPOD_API_KEY not set" });
+      try {
+        const mcpCall = async (id, name, argsObj) => {
+          const r = await fetch("https://mcp.runpod.io/", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json, text/event-stream",
+              Authorization: `Bearer ${env.RUNPOD_API_KEY}`,
+            },
+            body: JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: argsObj } }),
+            signal: AbortSignal.timeout(10000),
+          });
+          if (!r.ok) return null;
+          const j = await r.json().catch(() => null);
+          const txt = j?.result?.content?.[0]?.text;
+          return txt ? JSON.parse(txt) : null;
+        };
+        const [gData, bData] = await Promise.all([
+          mcpCall(1, "list-gpu-types", { include: ["AVAILABILITY"], product: ["POD"], limit: 50 }),
+          mcpCall(2, "get-balance", {}),
+        ]);
+        const focus = new Set([
+          "RTX PRO 4500", "RTX 4090", "RTX PRO 4000", "RTX 5090",
+          "A100 PCIe", "A100 SXM", "RTX PRO 6000", "H100 SXM",
+        ]);
+        const list = (gData?.gpus || [])
+          .filter((g) => focus.has(g.name) || (g.availability && g.availability !== "NONE" && g.memory >= 24))
+          .map((g) => ({
+            id: g.id,
+            name: g.name,
+            memory: g.memory,
+            community: g.price?.community ?? null,
+            secure: g.price?.secure ?? null,
+            availability: g.availability || "NONE",
+            dcs: (g.dataCenters || []).filter((d) => d.availability !== "NONE").map((d) => d.id),
+          }))
+          .sort((a, b) => {
+            const avA = a.availability !== "NONE" ? 0 : 1;
+            const avB = b.availability !== "NONE" ? 0 : 1;
+            if (avA !== avB) return avA - avB;
+            return (a.community || 99) - (b.community || 99);
+          });
+        return jsonResp({ gpus: list, balance: bData });
+      } catch (e) {
+        return jsonResp({ gpus: [], balance: null, error: String(e.message || e) });
+      }
     }
 
     // 3. Create a new job
@@ -282,15 +409,23 @@ export default {
       const job = await env.DB.prepare("SELECT * FROM gpu_jobs WHERE id = ?").bind(jobId).first();
       if (!job) return jsonResp({ error: "Job not found" }, 404);
       const ts = nowIso();
+      const nowSec = Math.round(Date.now() / 1000);
+      const initStages = [
+        { id: "pod_boot", label: "建卡与容器就绪", status: "running", started_at: nowSec, ended_at: null, elapsed_sec: 0, detail: "已入队，正在拉起云端 GPU 实例", meta: job.platform || "runpod" },
+        { id: "parallel_init", label: "并行冷启 (ComfyUI+权重+素材)", status: "pending", started_at: null, ended_at: null, elapsed_sec: null, detail: "等待容器就绪", meta: "" },
+        { id: "seg_1", label: "分段采样推理", status: "pending", started_at: null, ended_at: null, elapsed_sec: null, detail: "待推理", meta: "" },
+        { id: "stitch_upload", label: "拼接与回传中转", status: "pending", started_at: null, ended_at: null, elapsed_sec: null, detail: "待回传", meta: "" },
+        { id: "shutdown", label: "本地拉回与秒级停表", status: "pending", started_at: null, ended_at: null, elapsed_sec: null, detail: "10s 内自动停表", meta: "" },
+      ];
       await env.DB.prepare(
-        "UPDATE gpu_jobs SET status = 'queued', phase = 'queued', detail = 'Queued for worker', updated_at = ? WHERE id = ?"
+        "UPDATE gpu_jobs SET status = 'queued', phase = 'pod_boot', stage = '建卡拉起中', detail = 'Queued & launching GPU pod', telemetry_json = ?, updated_at = ? WHERE id = ?"
       )
-        .bind(ts, jobId)
+        .bind(JSON.stringify({ stages: initStages, enqueued_at: ts }), ts, jobId)
         .run();
 
       let podLaunch = null;
       if (job.platform === "runpod") {
-        podLaunch = await launchRunpodPod(env, url.origin, job.gpu_preference || "auto");
+        podLaunch = await launchRunpodPod(env, url.origin, job.gpu_preference || "auto", job.workflow || "h3_relay");
         if (podLaunch.pod_id) {
           await env.DB.prepare("UPDATE gpu_jobs SET pod_id = ?, detail = ?, updated_at = ? WHERE id = ?")
             .bind(
@@ -432,6 +567,30 @@ export default {
           .run();
       }
       return jsonResp({ ok: true });
+    }
+
+    // 10.5 List R2 files for a job (used by local zero-trace auto-puller)
+    const filesMatch = path.match(/^\/api\/jobs\/([^/]+)\/files$/);
+    if (request.method === "GET" && filesMatch) {
+      const jobId = decodeURIComponent(filesMatch[1]);
+      const scope = url.searchParams.get("scope") || "output"; // output | all
+      const prefix = scope === "all" ? `jobs/${jobId}/` : `jobs/${jobId}/output/`;
+      const listed = await env.GPU_JOBS.list({ prefix, limit: 1000 });
+      const files = (listed.objects || []).map((o) => ({
+        key: o.key,
+        name: o.key.slice(prefix.length),
+        size: o.size,
+        uploaded: o.uploaded,
+      }));
+      return jsonResp({ job_id: jobId, prefix, files });
+    }
+
+    // 10.6 Zero-trace purge: delete all R2 input/output objects and D1 row for a job
+    const purgeMatch = path.match(/^\/api\/jobs\/([^/]+)\/purge$/);
+    if ((request.method === "DELETE" || request.method === "POST") && purgeMatch) {
+      const jobId = decodeURIComponent(purgeMatch[1]);
+      const res = await purgeJobData(env, jobId);
+      return jsonResp(res);
     }
 
     // 11. Self-terminate or manual kill pod

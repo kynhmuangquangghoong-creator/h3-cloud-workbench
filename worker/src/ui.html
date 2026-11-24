@@ -3,265 +3,684 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>H3 云端 GPU 工作台 · Zero-Volume</title>
+<title>ComfyUI 云端工作台 · Architecture & Compute Cockpit</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b1220'/%3E%3Crect x='2' y='2' width='60' height='60' rx='12' fill='none' stroke='%2338bdf8' stroke-width='2.5'/%3E%3Cpath d='M18 22h12m0 0c6 0 4 20 10 20h6M18 42h12' stroke='%2338bdf8' stroke-width='4' stroke-linecap='round' fill='none'/%3E%3Ccircle cx='18' cy='22' r='4.5' fill='%2338bdf8'/%3E%3Ccircle cx='18' cy='42' r='4.5' fill='%23818cf8'/%3E%3Ccircle cx='46' cy='42' r='4.5' fill='%2322c55e'/%3E%3C/svg%3E" />
 <style>
   :root {
-    --bg: #0c0e14; --panel: #141824; --border: #252b3d; --text: #e6ebf5;
-    --muted: #8b95ad; --accent: #38bdf8; --ok: #22c55e; --warn: #f59e0b; --err: #ef4444;
+    --bg: #07090f;
+    --surface: rgba(15, 20, 32, 0.78);
+    --surface-2: rgba(20, 27, 44, 0.88);
+    --border: rgba(148, 163, 184, 0.14);
+    --border-hi: rgba(56, 189, 248, 0.35);
+    --text: #edf2f7;
+    --muted: #8b98b0;
+    --dim: #5d6a82;
+    --cyan: #38bdf8;
+    --indigo: #818cf8;
+    --emerald: #34d399;
+    --amber: #fbbf24;
+    --rose: #fb7185;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
-  header { display: flex; justify-content: space-between; align-items: center; padding: 14px 22px; border-bottom: 1px solid var(--border); background: #10131d; }
-  header h1 { margin: 0; font-size: 17px; letter-spacing: 0.4px; }
-  .badge { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: #1e293b; color: var(--accent); margin-left: 8px; }
-  .token-bar { display: flex; gap: 8px; align-items: center; }
-  .token-bar input { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 6px; width: 220px; }
-  .layout { display: grid; grid-template-columns: 400px 1fr; gap: 18px; padding: 18px 22px; max-width: 1440px; margin: 0 auto; }
-  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-  .card h2 { margin: 0 0 12px; font-size: 14px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; }
-  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
-  input[type="text"], input[type="number"], select, textarea {
-    width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
-    padding: 8px 10px; border-radius: 8px; font-size: 13px; font-family: inherit;
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; min-height: 100vh; }
+  body {
+    background-image:
+      radial-gradient(circle at 12% 0%, rgba(56, 189, 248, 0.09), transparent 36%),
+      radial-gradient(circle at 88% 8%, rgba(129, 140, 248, 0.08), transparent 32%),
+      radial-gradient(rgba(148, 163, 184, 0.11) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 24px 24px;
   }
-  textarea { min-height: 110px; resize: vertical; line-height: 1.5; }
-  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  button {
-    background: var(--accent); color: #08101c; border: none; padding: 9px 14px; border-radius: 8px;
-    font-weight: 600; cursor: pointer; font-size: 13px;
+
+  /* Topbar */
+  .topbar {
+    position: sticky; top: 0; z-index: 40;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 14px 28px;
+    background: rgba(7, 9, 15, 0.82);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
   }
-  button:hover { filter: brightness(1.08); }
-  button.danger { background: var(--err); color: #fff; padding: 5px 10px; font-size: 12px; }
-  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 6px 10px; }
-  .job-item { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; background: #101420; }
-  .job-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
-  .st-queued, .st-uploading { background: #334155; color: #cbd5e1; }
-  .st-running { background: rgba(56,189,248,0.18); color: var(--accent); }
-  .st-completed { background: rgba(34,197,94,0.18); color: var(--ok); }
-  .st-failed { background: rgba(239,68,68,0.18); color: var(--err); }
-  .bar { height: 6px; background: #1e2436; border-radius: 999px; overflow: hidden; margin: 8px 0; }
-  .bar > div { height: 100%; background: linear-gradient(90deg, #38bdf8, #818cf8); transition: width 0.3s; }
-  .meta { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
-  video { width: 100%; max-height: 360px; border-radius: 8px; margin-top: 10px; background: #000; }
-  .pod-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; font-size: 12px; }
-  pre.err { background: #1f1215; color: #fca5a5; padding: 8px; border-radius: 6px; font-size: 11px; overflow-x: auto; white-space: pre-wrap; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-logo { width: 34px; height: 34px; border-radius: 10px; box-shadow: 0 0 0 1px rgba(56,189,248,.32), 0 8px 20px rgba(56,189,248,.12); }
+  .brand-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; }
+  .brand-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+    background: rgba(56, 189, 248, 0.11); color: var(--cyan); border: 1px solid rgba(56, 189, 248, 0.24);
+  }
+  .chip.green { background: rgba(52, 211, 153, 0.11); color: var(--emerald); border-color: rgba(52, 211, 153, 0.24); }
+  .chip.amber { background: rgba(251, 191, 36, 0.11); color: var(--amber); border-color: rgba(251, 191, 36, 0.24); }
+  .chip.muted { background: rgba(148, 163, 184, 0.1); color: var(--muted); border-color: rgba(148, 163, 184, 0.18); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; display: inline-block; }
+
+  .top-right { display: flex; align-items: center; gap: 10px; }
+  .tok-input {
+    background: rgba(15, 20, 32, 0.9); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 12px; border-radius: 8px; font-size: 12.5px; width: 210px; font-family: var(--mono);
+  }
+  .tok-input:focus { outline: none; border-color: var(--cyan); }
+  .btn {
+    background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 13px; border-radius: 8px; font-size: 12.5px; font-weight: 500; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn:hover { background: rgba(56, 189, 248, 0.14); border-color: var(--border-hi); color: #fff; }
+  .btn.active { background: rgba(56, 189, 248, 0.18); border-color: var(--cyan); color: var(--cyan); }
+  .btn.danger { background: rgba(251, 113, 133, 0.15); border-color: rgba(251, 113, 133, 0.4); color: var(--rose); padding: 4px 10px; font-size: 11.5px; }
+  .btn.danger:hover { background: var(--rose); color: #fff; }
+
+  /* Main Container */
+  .wrap { max-width: 1520px; margin: 0 auto; padding: 18px 28px 60px; }
+  .tab-bar {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin-bottom: 20px; padding: 6px;
+    background: rgba(15, 20, 32, 0.72); border: 1px solid var(--border);
+    border-radius: 12px; width: fit-content; max-width: 100%;
+  }
+  .tab-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: transparent; border: 1px solid transparent; color: var(--muted);
+    padding: 8px 16px; border-radius: 9px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all 0.16s;
+  }
+  .tab-btn:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+  .tab-btn.active {
+    background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.42);
+    color: var(--cyan); box-shadow: 0 2px 12px rgba(56, 189, 248, 0.12);
+  }
+  .tab-badge {
+    font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 999px;
+    background: rgba(148, 163, 184, 0.16); color: var(--muted);
+  }
+  .tab-btn.active .tab-badge { background: rgba(56, 189, 248, 0.22); color: #e0f2fe; }
+  .tab-page { display: none; animation: fadeIn 0.18s ease-out; }
+  .tab-page.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  .sec-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin: 4px 0 14px; flex-wrap: wrap; }
+  .sec-head h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: 0.01em; display: flex; align-items: center; gap: 9px; }
+  .sec-head .hint { font-size: 12px; color: var(--muted); }
+
+  /* Glass Cards */
+  .card {
+    background: var(--surface); backdrop-filter: blur(12px);
+    border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px;
+  }
+
+  /* Section 1: Compute Fleet */
+  .fleet-grid { display: grid; grid-template-columns: 1.55fr 1fr 1fr; gap: 16px; }
+  @media (max-width: 1150px) { .fleet-grid { grid-template-columns: 1fr; } }
+  .fleet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+  .fleet-name { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .fleet-meta { font-size: 12px; color: var(--muted); line-height: 1.55; margin-bottom: 12px; }
+  .gpu-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 8px; }
+  .gpu-tile {
+    background: rgba(9, 13, 22, 0.85); border: 1px solid var(--border); border-radius: 10px; padding: 9px 11px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .gpu-tile.avail { border-color: rgba(52, 211, 153, 0.3); }
+  .gpu-tile.oos { opacity: 0.55; }
+  .gpu-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; font-weight: 600; }
+  .gpu-price { font-family: var(--mono); font-size: 11.5px; color: var(--cyan); }
+  .gpu-sub { font-size: 10.5px; color: var(--muted); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .spec-list { display: flex; flex-direction: column; gap: 8px; }
+  .spec-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 7px 10px; border-radius: 8px; background: rgba(9, 13, 22, 0.7); border: 1px solid rgba(148,163,184,.08); }
+  .spec-row span:first-child { color: var(--muted); }
+  .spec-row b { font-family: var(--mono); font-weight: 600; color: var(--text); }
+
+  /* Section 2: Workflow Pipeline Long-Lines */
+  .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; }
+  .wf-stack { display: flex; flex-direction: column; gap: 16px; }
+  .wf-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 18px 20px 20px; position: relative; overflow: hidden;
+  }
+  .wf-card::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
+    background: linear-gradient(90deg, var(--cyan), var(--indigo), transparent);
+    opacity: 0.65;
+  }
+  .wf-card.cat-audio::before { background: linear-gradient(90deg, var(--emerald), var(--cyan), transparent); }
+  .wf-card.cat-image::before { background: linear-gradient(90deg, var(--amber), var(--rose), transparent); }
+  .wf-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+  .wf-title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .wf-desc { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .wf-badges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+  /* The Horizontal Pipeline Track */
+  .pipe-scroll {
+    overflow-x: auto; padding: 10px 4px 8px;
+    scrollbar-width: thin; scrollbar-color: rgba(148,163,184,0.25) transparent;
+  }
+  .pipe-track {
+    display: flex; align-items: stretch; gap: 0; min-width: max-content; position: relative;
+  }
+  .pipe-node {
+    width: 248px; flex: none;
+    background: linear-gradient(180deg, rgba(22, 30, 48, 0.94), rgba(12, 17, 29, 0.96));
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 12px; padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 6px;
+    position: relative;
+    transition: border-color 0.18s, transform 0.18s;
+  }
+  .pipe-node:hover { border-color: var(--border-hi); transform: translateY(-2px); }
+  .pipe-node-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .node-step {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em;
+    padding: 2px 7px; border-radius: 6px;
+    background: rgba(56, 189, 248, 0.14); color: var(--cyan);
+  }
+  .pipe-node.t-lora .node-step { background: rgba(129, 140, 248, 0.16); color: var(--indigo); }
+  .pipe-node.t-node .node-step { background: rgba(52, 211, 153, 0.16); color: var(--emerald); }
+  .pipe-node.t-opt .node-step { background: rgba(251, 191, 36, 0.16); color: var(--amber); }
+  .node-size { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+  .node-model { font-size: 13px; font-weight: 650; color: #f8fafc; line-height: 1.3; }
+  .node-purpose { font-size: 11.5px; color: #9fb0c9; line-height: 1.5; margin-top: 2px; }
+  .pipe-arrow {
+    width: 34px; flex: none; display: flex; align-items: center; justify-content: center; position: relative;
+  }
+  .pipe-arrow::before {
+    content: ""; position: absolute; left: 0; right: 6px; height: 2px;
+    background: linear-gradient(90deg, rgba(56,189,248,0.6), rgba(129,140,248,0.85));
+  }
+  .pipe-arrow::after {
+    content: ""; position: absolute; right: 2px;
+    border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 7px solid var(--indigo);
+  }
+
+  /* Section 3: Live Jobs & Pods */
+  .exec-grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; }
+  @media (max-width: 1024px) { .exec-grid { grid-template-columns: 1fr; } }
+  .pod-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 10px 12px; border-radius: 10px; background: rgba(9, 13, 22, 0.8);
+    border: 1px solid var(--border); margin-bottom: 8px; font-size: 12px;
+  }
+  .job-card {
+    background: rgba(9, 13, 22, 0.82); border: 1px solid var(--border); border-radius: 12px;
+    padding: 13px 16px; margin-bottom: 10px;
+  }
+  .job-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .bar { height: 5px; background: rgba(148, 163, 184, 0.14); border-radius: 999px; overflow: hidden; margin: 9px 0; }
+  .bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--indigo)); transition: width 0.3s; }
+  .job-meta { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11.5px; color: var(--muted); font-family: var(--mono); }
+  .tel-strip {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    margin: 10px 0 6px; padding: 8px 11px; border-radius: 9px;
+    background: rgba(15, 23, 42, 0.72); border: 1px solid rgba(56, 189, 248, 0.16);
+    font-size: 11.5px; font-family: var(--mono); color: #cbd5e1;
+  }
+  .tel-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.04); }
+  .tel-pill b { color: var(--cyan); }
+  .exec-pipe-scroll { overflow-x: auto; padding: 8px 2px 6px; margin-top: 4px; scrollbar-width: thin; scrollbar-color: rgba(148,163,184,0.25) transparent; }
+  .exec-pipe { display: flex; align-items: stretch; gap: 0; min-width: max-content; }
+  .exec-node {
+    width: 196px; flex: none; padding: 10px 12px; border-radius: 10px;
+    background: rgba(15, 22, 36, 0.85); border: 1px solid rgba(148, 163, 184, 0.16);
+    display: flex; flex-direction: column; gap: 5px; transition: all 0.2s;
+  }
+  .exec-node.st-pending { opacity: 0.56; }
+  .exec-node.st-running {
+    border-color: var(--cyan); background: linear-gradient(180deg, rgba(14, 42, 66, 0.92), rgba(11, 20, 36, 0.95));
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.25), 0 0 18px rgba(56, 189, 248, 0.16);
+    animation: nodePulse 2s ease-in-out infinite;
+  }
+  .exec-node.st-done { border-color: rgba(52, 211, 153, 0.42); background: rgba(12, 32, 32, 0.65); }
+  .exec-node.st-error { border-color: rgba(251, 113, 133, 0.55); background: rgba(52, 16, 26, 0.65); }
+  @keyframes nodePulse {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(56,189,248,.22), 0 0 12px rgba(56,189,248,.12); }
+    50% { box-shadow: 0 0 0 1px rgba(56,189,248,.55), 0 0 22px rgba(56,189,248,.28); }
+  }
+  .exec-node-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11px; font-weight: 650; }
+  .exec-st { display: inline-flex; align-items: center; gap: 5px; }
+  .st-running .exec-st { color: var(--cyan); }
+  .st-done .exec-st { color: var(--emerald); }
+  .st-error .exec-st { color: var(--rose); }
+  .st-pending .exec-st { color: var(--dim); }
+  .exec-time { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+  .exec-title { font-size: 12px; font-weight: 600; color: #f1f5f9; line-height: 1.3; }
+  .exec-detail { font-size: 11px; color: #94a3b8; line-height: 1.4; word-break: break-word; }
+  .exec-meta-tag {
+    margin-top: auto; align-self: flex-start; font-family: var(--mono); font-size: 10px;
+    padding: 2px 6px; border-radius: 5px; background: rgba(56, 189, 248, 0.12); color: #bae6fd;
+  }
+  .st-done .exec-meta-tag { background: rgba(52, 211, 153, 0.14); color: #a7f3d0; }
+  .exec-arrow { width: 24px; flex: none; display: flex; align-items: center; justify-content: center; position: relative; }
+  .exec-arrow::before { content: ""; position: absolute; left: 0; right: 5px; height: 2px; background: rgba(148,163,184,0.28); }
+  .exec-arrow::after { content: ""; position: absolute; right: 1px; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 6px solid rgba(148,163,184,0.42); }
+  .exec-arrow.done::before { background: linear-gradient(90deg, var(--emerald), var(--cyan)); }
+  .exec-arrow.done::after { border-left-color: var(--cyan); }
+  video, img.preview { max-width: 100%; max-height: 360px; border-radius: 10px; margin-top: 10px; background: #000; }
+  audio { width: 100%; margin-top: 10px; }
+  pre.err { background: rgba(251, 113, 133, 0.1); border: 1px solid rgba(251, 113, 133, 0.25); color: #fda4af; padding: 9px 12px; border-radius: 8px; font-size: 11px; overflow-x: auto; white-space: pre-wrap; margin-top: 8px; }
+  .empty { text-align: center; padding: 28px 16px; color: var(--muted); font-size: 12.5px; }
 </style>
 </head>
 <body>
-<header>
-  <div>
-    <h1>H3 云端 GPU 工作台 <span class="badge">零热卷 · \$0 固定月费</span></h1>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-logo" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-label="ComfyUI Logo">
+      <rect width="64" height="64" rx="14" fill="#0b1220"/>
+      <path d="M16 21h13c7 0 5 22 12 22h7M16 43h13" stroke="#38bdf8" stroke-width="4.2" stroke-linecap="round" fill="none"/>
+      <circle cx="16" cy="21" r="5" fill="#38bdf8"/>
+      <circle cx="16" cy="43" r="5" fill="#818cf8"/>
+      <circle cx="48" cy="43" r="5" fill="#22c55e"/>
+    </svg>
+    <div>
+      <div class="brand-title">
+        ComfyUI 云端工作台
+        <span class="chip green"><i class="dot"></i>零热卷 · $0 固定月费</span>
+        <span class="chip muted" id="imgChip">GHCR 预置镜像</span>
+      </div>
+      <div class="brand-sub">多平台弹性算力矩阵 · 工作流节点长线蓝图 · Agent/API 托管任务监控</div>
+    </div>
   </div>
-  <div class="token-bar">
-    <input id="tokenInput" type="password" placeholder="输入访问 Token" />
-    <button class="ghost" onclick="saveToken()">保存并刷新</button>
+  <div class="top-right">
+    <input id="tokenInput" class="tok-input" type="password" placeholder="输入访问 Token" />
+    <button class="btn" onclick="saveToken()">接入并刷新</button>
   </div>
 </header>
 
-<div class="layout">
-  <div>
-    <div class="card">
-      <h2>新建 H3 接力任务</h2>
-      <label>任务标题</label>
-      <input id="title" type="text" placeholder="例如：雨夜霓虹机甲_01" />
+<main class="wrap">
 
-      <div class="row">
-        <div>
-          <label>算力平台</label>
-          <select id="platform">
-            <option value="runpod">Runpod (零热卷自动开卡)</option>
-            <option value="colab">Colab Pro+ (消费月费余额)</option>
-            <option value="local5090">本机 5090</option>
-          </select>
+  <nav class="tab-bar" role="tablist" aria-label="工作台分页">
+    <button class="tab-btn active" id="tabBtn-compute" role="tab" onclick="switchTab('compute')">
+      算力配置 <span class="tab-badge" id="badge-compute">3 池</span>
+    </button>
+    <button class="tab-btn" id="tabBtn-workflows" role="tab" onclick="switchTab('workflows')">
+      工作流 <span class="tab-badge" id="badge-workflows">11</span>
+    </button>
+    <button class="tab-btn" id="tabBtn-jobs" role="tab" onclick="switchTab('jobs')">
+      任务列表 <span class="tab-badge" id="badge-jobs">0</span>
+    </button>
+  </nav>
+
+  <!-- Page 1: Multi-Platform Compute Fleet -->
+  <section class="tab-page active" id="page-compute">
+    <div class="sec-head">
+      <h2>多平台可调用算力配置</h2>
+      <div class="hint" id="fleetHint">任务由 Agent / API 自动下发调度 · 本页只读监控与架构洞察</div>
+    </div>
+
+    <div class="fleet-grid">
+      <!-- Runpod Live Pool -->
+      <div class="card">
+        <div class="fleet-head">
+          <div class="fleet-name">Runpod 零热卷弹性池 <span class="chip" id="rpBalChip">余额读取中</span></div>
+          <button class="btn" style="padding:4px 10px;font-size:11.5px" onclick="loadRunpodCatalog()">刷新库存</button>
         </div>
-        <div>
-          <label>Runpod 机型偏好</label>
-          <select id="gpuPref">
-            <option value="auto">自动优选 (5090→A100→6000)</option>
-            <option value="rtx5090">RTX 5090 ($0.69/hr 起)</option>
-            <option value="a100">A100 SXM 80GB ($1.39/hr 起)</option>
-            <option value="pro6000">RTX PRO 6000 96GB</option>
-          </select>
+        <div class="fleet-meta">
+          按工作流智能分流选卡：<b>音频任务</b>自动优先抢 <code>RTX PRO 4500 ($0.34/hr)</code>；<b>H3 视频</b>优先 <code>RTX 5090 / A100 80GB / PRO 6000</code>。开机 4×16 并发拉权重，空闲 3 分钟自毁 + 10 分钟 Cron 停表。
+        </div>
+        <div class="gpu-chips" id="rpGpuGrid">
+          <div class="empty" style="grid-column:1/-1;padding:14px">输入 Token 后实时拉取 Runpod 可租用 GPU 库存与价格...</div>
         </div>
       </div>
 
-      <div class="row">
-        <div>
-          <label>分辨率</label>
-          <select id="resolution">
-            <option value="1344x768">1344 × 768 (768p 推荐)</option>
-            <option value="2048x1152">2048 × 1152 (2K)</option>
-          </select>
+      <!-- Colab Pro+ -->
+      <div class="card">
+        <div class="fleet-head">
+          <div class="fleet-name">Colab Pro+ 半自动池 <span class="chip green">消月费余额</span></div>
         </div>
-        <div>
-          <label>随机种子 (-1 随机)</label>
-          <input id="seed" type="number" value="-1" />
+        <div class="fleet-meta">直连 Google Drive 20TB 永久权重仓（零额外存储费），适合非高峰期跑 H3 接力与 140 GB H3 Image。</div>
+        <div class="spec-list">
+          <div class="spec-row"><span>主力卡型</span><b>A100 80GB / L4 24GB</b></div>
+          <div class="spec-row"><span>权重策略</span><b>Drive 软链复用 (0 下载)</b></div>
+          <div class="spec-row"><span>视频 / 音频入口</span><b>H3_Universal_Worker_Colab</b></div>
+          <div class="spec-row"><span>140 GB 生图入口</span><b>H3_Image_Colab_Deploy</b></div>
         </div>
       </div>
 
-      <label>分段提示词（每行 1 段，2–8 段接力）</label>
-      <textarea id="prompts" placeholder="第 1 段镜头提示词与台词&#10;第 2 段镜头提示词与台词"></textarea>
+      <!-- Local 5090 Ephemeral -->
+      <div class="card">
+        <div class="fleet-head">
+          <div class="fleet-name">5090 临时即用即焚节点 <span class="chip amber">0 硬盘缓存</span></div>
+        </div>
+        <div class="fleet-meta">宿主机大模型已全清空释放，随时可用单行 <code>docker run --rm</code> 借用显卡，跑完自动销毁零残留。</div>
+        <div class="spec-list">
+          <div class="spec-row"><span>硬件规格</span><b>4 × RTX 5090 (32 GB)</b></div>
+          <div class="spec-row"><span>远程触发器</span><b>run_5090_once.ps1</b></div>
+          <div class="spec-row"><span>容器镜像</span><b>ghcr.io/.../h3-cloud-workbench</b></div>
+          <div class="spec-row"><span>自动退出清理</span><b>EXIT_ON_IDLE=1 (--rm)</b></div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-      <label>参考图 / 关键帧（1–9 张，直传 R2）</label>
-      <input id="imgFiles" type="file" accept=".png,.jpg,.jpeg,.webp" multiple />
-
-      <label>参考音色音频（0–3 段，可选）</label>
-      <input id="audFiles" type="file" accept=".wav,.mp3,.flac,.m4a,.ogg" multiple />
-
-      <div style="margin-top:14px; display:flex; gap:10px; align-items:center;">
-        <button id="submitBtn" onclick="submitJob()">提交并启动生成</button>
-        <span id="submitMsg" style="font-size:12px; color:var(--muted);"></span>
+  <!-- Page 2: Workflow Pipeline Long-Line Blueprints -->
+  <section class="tab-page" id="page-workflows">
+    <div class="sec-head">
+      <h2>工作流长线架构蓝图（按节点串联展示大模型职责）</h2>
+      <div class="filter-bar" id="wfFilters">
+        <button class="btn active" onclick="setFilter('all', this)">全部 (11)</button>
+        <button class="btn" onclick="setFilter('video', this)">🎬 视频 (1)</button>
+        <button class="btn" onclick="setFilter('audio', this)">🎵 音频套件 (9)</button>
+        <button class="btn" onclick="setFilter('image', this)">🖼️ 生图 (1)</button>
       </div>
     </div>
 
-    <div class="card">
-      <h2>活跃 Runpod 实例 & 看门狗</h2>
-      <div id="podsBox" style="font-size:12px; color:var(--muted);">加载中...</div>
+    <div class="wf-stack" id="wfStack">
+      <div class="card empty">输入右上角 Token 后自动从 R2 单真源加载全部 11 条工作流架构长线...</div>
     </div>
-  </div>
+  </section>
 
-  <div>
-    <div class="card">
-      <h2>实时队列与成片预览（每 4 秒自动刷新）</h2>
-      <div id="jobsBox" style="font-size:13px; color:var(--muted);">请先在右上角输入 Token</div>
+  <!-- Page 3: Live Execution & Pod Watchdog -->
+  <section class="tab-page" id="page-jobs">
+    <div class="sec-head">
+      <h2>任务列表、执行遥测与实例看门狗</h2>
+      <div class="hint">按单自动拉回本地后立即焚毁云端记录 · 每 4 秒同步队列心跳（24h 兜底自清）</div>
     </div>
-  </div>
-</div>
+
+    <div class="exec-grid">
+      <div class="card">
+        <div class="fleet-head" style="margin-bottom:10px">
+          <div class="fleet-name">活跃 Runpod 实例 & 看门狗</div>
+          <span class="chip muted">Cron 10m</span>
+        </div>
+        <div id="podsBox" class="empty" style="padding:18px 8px">等待鉴权...</div>
+      </div>
+
+      <div class="card">
+        <div class="fleet-head" style="margin-bottom:10px">
+          <div class="fleet-name">实时任务队列（零残留模式）</div>
+          <span class="chip muted" id="jobCountChip">0 条记录</span>
+        </div>
+        <div id="jobsBox" class="empty">输入 Token 后显示实时任务与执行记录</div>
+      </div>
+    </div>
+  </section>
+
+</main>
 
 <script>
 const $ = id => document.getElementById(id);
 let TOKEN = localStorage.getItem("gpu_wb_token") || "";
 $("tokenInput").value = TOKEN;
 
+let allWorkflows = [];
+let curFilter = "all";
+const VALID_TABS = ["compute", "workflows", "jobs"];
+
+function switchTab(name, updateHash = true) {
+  if (!VALID_TABS.includes(name)) name = "compute";
+  VALID_TABS.forEach(t => {
+    const btn = $("tabBtn-" + t);
+    const page = $("page-" + t);
+    if (btn) btn.classList.toggle("active", t === name);
+    if (page) page.classList.toggle("active", t === name);
+  });
+  localStorage.setItem("gpu_wb_tab", name);
+  if (updateHash && location.hash !== "#" + name) {
+    history.replaceState(null, "", "#" + name);
+  }
+}
+
+(function initTab() {
+  const fromHash = (location.hash || "").replace(/^#/, "");
+  const saved = localStorage.getItem("gpu_wb_tab") || "compute";
+  switchTab(VALID_TABS.includes(fromHash) ? fromHash : saved, false);
+  window.addEventListener("hashchange", () => {
+    const h = (location.hash || "").replace(/^#/, "");
+    if (VALID_TABS.includes(h)) switchTab(h, false);
+  });
+})();
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 function saveToken() {
   TOKEN = $("tokenInput").value.trim();
   localStorage.setItem("gpu_wb_token", TOKEN);
-  refresh();
+  loadAll();
 }
 
 async function api(path, opts = {}) {
   const headers = Object.assign({ Authorization: "Bearer " + TOKEN }, opts.headers || {});
   const r = await fetch(path, Object.assign({}, opts, { headers }));
-  if (!r.ok) throw new Error("HTTP " + r.status + ": " + (await r.text()));
+  if (!r.ok) throw new Error("HTTP " + r.status);
   return r.json();
 }
 
-async function submitJob() {
-  const imgs = Array.from($("imgFiles").files || []);
-  const auds = Array.from($("audFiles").files || []);
-  const prompts = $("prompts").value.split("\n").map(s => s.trim()).filter(Boolean);
-  if (!imgs.length) return alert("请至少选择 1 张参考图片");
-  if (!prompts.length) return alert("请输入至少 1 行分段提示词");
+function setFilter(cat, btn) {
+  curFilter = cat;
+  document.querySelectorAll("#wfFilters .btn").forEach(b => b.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+  renderWorkflows();
+}
 
-  $("submitBtn").disabled = true;
-  $("submitMsg").textContent = "创建任务中...";
+function nodeClass(tag) {
+  if (tag === "lora") return "t-lora";
+  if (tag === "node" || tag === "runtime") return "t-node";
+  if (tag === "2K按需" || tag === "Drive常驻") return "t-opt";
+  return "";
+}
+
+function renderWorkflows() {
+  const list = curFilter === "all" ? allWorkflows : allWorkflows.filter(w => w.category === curFilter);
+  if (!list.length) {
+    $("wfStack").innerHTML = '<div class="card empty">当前分类暂无工作流</div>';
+    return;
+  }
+  $("wfStack").innerHTML = list.map(w => {
+    const catIcon = w.category === "video" ? "🎬" : (w.category === "audio" ? "🎵" : "🖼️");
+    const pipe = (w.pipeline || []).map((n, idx) => {
+      const arrow = idx > 0 ? '<div class="pipe-arrow" aria-hidden="true"></div>' : '';
+      return `${arrow}
+        <div class="pipe-node ${nodeClass(n.tag)}">
+          <div class="pipe-node-head">
+            <span class="node-step">${idx + 1}. ${esc(n.role)}</span>
+            <span class="node-size">${esc(n.size)}</span>
+          </div>
+          <div class="node-model">${esc(n.model)}</div>
+          <div class="node-purpose">${esc(n.purpose)}</div>
+        </div>`;
+    }).join("");
+
+    return `
+      <div class="wf-card cat-${esc(w.category)}">
+        <div class="wf-top">
+          <div>
+            <div class="wf-title">
+              <span>${catIcon} ${esc(w.title)}</span>
+              <span class="chip muted">${esc(w.id)} · ${esc(w.version || "v1")}</span>
+            </div>
+            <div class="wf-desc">${esc(w.description || "")}</div>
+          </div>
+          <div class="wf-badges">
+            <span class="chip">权重 ~${Number(w.total_weights_gb || 0).toFixed(1)} GB</span>
+            <span class="chip green">推荐: ${esc(w.recommended_gpu || "按需")}</span>
+            <span class="chip muted">${(w.platforms || []).join(" / ")}</span>
+          </div>
+        </div>
+        <div class="pipe-scroll">
+          <div class="pipe-track">${pipe}</div>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+async function loadWorkflows() {
+  if (!TOKEN) return;
   try {
-    const created = await api("/api/jobs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: $("title").value.trim() || "H3_" + new Date().toLocaleTimeString(),
-        platform: $("platform").value,
-        gpu_preference: $("gpuPref").value,
-        workflow: "h3_relay",
-        workflow_version: "v1",
-        params: {
-          resolution: $("resolution").value,
-          seed: Number($("seed").value || -1),
-          audio: true,
-          prompts,
-        },
-      }),
-    });
-    const allFiles = [...imgs, ...auds];
-    for (let i = 0; i < allFiles.length; i++) {
-      const f = allFiles[i];
-      $("submitMsg").textContent = `直传素材 ${i + 1}/${allFiles.length}: ${f.name}`;
-      await fetch(`/api/jobs/${encodeURIComponent(created.id)}/input/${encodeURIComponent(f.name)}`, {
-        method: "PUT",
-        headers: { Authorization: "Bearer " + TOKEN, "Content-Type": f.type || "application/octet-stream" },
-        body: f,
-      });
-    }
-    $("submitMsg").textContent = "入队并唤醒算力...";
-    const enq = await api(`/api/jobs/${encodeURIComponent(created.id)}/enqueue`, { method: "POST" });
-    $("submitMsg").textContent = enq.pod_launch?.launched
-      ? `已开卡 ${enq.pod_launch.pod_id} (${enq.pod_launch.gpu_type})`
-      : "已入队等待 Worker 领取";
-    refresh();
+    const data = await api("/api/assets/registry/workflows_catalog.json");
+    allWorkflows = data.workflows || [];
+    $("badge-workflows").textContent = String(allWorkflows.length);
+    renderWorkflows();
   } catch (e) {
-    $("submitMsg").textContent = "提交失败: " + e.message;
-  } finally {
-    $("submitBtn").disabled = false;
+    $("wfStack").innerHTML = `<div class="card empty">工作流架构加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+async function loadRunpodCatalog() {
+  if (!TOKEN) return;
+  try {
+    const data = await api("/api/runpod/catalog");
+    if (data.balance && data.balance.balanceAmount != null) {
+      $("rpBalChip").textContent = `余额 $${Number(data.balance.balanceAmount).toFixed(2)}`;
+      $("rpBalChip").className = "chip green";
+    }
+    const gpus = data.gpus || [];
+    if (!gpus.length) {
+      $("rpGpuGrid").innerHTML = '<div class="empty" style="grid-column:1/-1;padding:10px">暂未获取到 Runpod 目录</div>';
+      return;
+    }
+    $("rpGpuGrid").innerHTML = gpus.map(g => {
+      const ok = g.availability && g.availability !== "NONE";
+      const stColor = g.availability === "HIGH" ? "var(--emerald)" : (ok ? "var(--amber)" : "var(--dim)");
+      const dcs = (g.dcs || []).slice(0, 3).join(", ") || "无现货";
+      return `
+        <div class="gpu-tile ${ok ? 'avail' : 'oos'}">
+          <div class="gpu-top">
+            <span>${esc(g.name)}</span>
+            <span style="color:${stColor};font-size:10.5px;font-family:var(--mono)">● ${esc(g.availability)}</span>
+          </div>
+          <div class="gpu-price">${g.memory}GB · Com $${g.community}/hr · Sec $${g.secure}/hr</div>
+          <div class="gpu-sub">${esc(dcs)}</div>
+        </div>`;
+    }).join("");
+  } catch (e) {
+    $("rpGpuGrid").innerHTML = `<div class="empty" style="grid-column:1/-1;padding:10px">库存查询失败：${esc(e.message)}</div>`;
   }
 }
 
 async function killPod(podId) {
   if (!confirm(`确定立即销毁 Runpod 实例 ${podId} 并停表？`)) return;
   await api(`/api/pods/${encodeURIComponent(podId)}`, { method: "DELETE" });
-  refresh();
+  refreshOverview();
 }
 
-async function refresh() {
+async function purgeJob(jobId) {
+  if (!confirm(`确定立即焚毁任务 ${jobId} 的云端 R2 文件和 D1 记录？`)) return;
+  await api(`/api/jobs/${encodeURIComponent(jobId)}/purge`, { method: "DELETE" });
+  refreshOverview();
+}
+
+function renderStagePipeline(stages, fallbackStatus = "pending") {
+  const list = Array.isArray(stages) && stages.length ? stages : [
+    { id: "pod_boot", label: "建卡与容器就绪", status: fallbackStatus, elapsed_sec: null, detail: "拉起 Runpod 零热卷实例", meta: "社区按秒计费" },
+    { id: "parallel_init", label: "并行冷启 (ComfyUI+权重+素材)", status: "pending", elapsed_sec: null, detail: "ComfyUI 启动与 4×16 拉权重并发", meta: "隐藏 ~30s 启动" },
+    { id: "seg_1", label: "第 1/2 段采样推理", status: "pending", elapsed_sec: null, detail: "实时捕获 ComfyUI 节点与步数", meta: "WebSocket 遥测" },
+    { id: "seg_2", label: "第 2/2 段接力推理", status: "pending", elapsed_sec: null, detail: "Latent 接力连续生成", meta: "峰值显存监控" },
+    { id: "stitch_upload", label: "拼接与回传中转", status: "pending", elapsed_sec: null, detail: "无损拼接并回传 R2", meta: "≤19MB 原画" },
+    { id: "shutdown", label: "本地拉回与秒级停表", status: "pending", elapsed_sec: null, detail: "落盘 E:\\GPU_Outputs 后焚毁云端", meta: "10s 自动停表" },
+  ];
+  const stIcon = { done: "✓ 已完成", running: "● 执行中", error: "✕ 异常", pending: "○ 等待中" };
+  return `
+    <div class="exec-pipe-scroll">
+      <div class="exec-pipe">
+        ${list.map((s, i) => {
+          const st = s.status || "pending";
+          const prevDone = i > 0 && (list[i - 1].status === "done");
+          const arrow = i > 0 ? `<div class="exec-arrow ${prevDone ? "done" : ""}" aria-hidden="true"></div>` : "";
+          const tStr = s.elapsed_sec != null ? `${Number(s.elapsed_sec).toFixed(1)}s` : "";
+          return `${arrow}
+            <div class="exec-node st-${esc(st)}">
+              <div class="exec-node-top">
+                <span class="exec-st">${stIcon[st] || esc(st)}</span>
+                <span class="exec-time">${esc(tStr)}</span>
+              </div>
+              <div class="exec-title">${i + 1}. ${esc(s.label || s.id)}</div>
+              ${s.detail ? `<div class="exec-detail">${esc(s.detail)}</div>` : ""}
+              ${s.meta ? `<div class="exec-meta-tag">${esc(s.meta)}</div>` : ""}
+            </div>`;
+        }).join("")}
+      </div>
+    </div>`;
+}
+
+async function refreshOverview() {
   if (!TOKEN) return;
   try {
     const data = await api("/api/overview");
-    // Pods
-    if (!data.pods.length) {
-      $("podsBox").innerHTML = "当前无 Runpod 实例（0 计费）";
-    } else {
-      $("podsBox").innerHTML = data.pods.map(p => `
-        <div class="pod-row">
-          <div>
-            <b>${p.pod_id}</b> · ${p.gpu_type} (${p.cloud_type})<br/>
-            <span style="color:var(--muted)">状态: ${p.status} · $${p.hourly_price}/hr · ${p.terminate_reason || "运行/启动中"}</span>
-          </div>
-          ${p.status !== "terminated" ? `<button class="danger" onclick="killPod('${p.pod_id}')">立即销毁</button>` : ""}
-        </div>
-      `).join("");
+    if (data.image_name) {
+      const shortImg = data.image_name.split("/").slice(-1)[0];
+      $("imgChip").textContent = "镜像: " + shortImg;
+      $("imgChip").className = "chip";
     }
-    // Jobs
-    if (!data.jobs.length) {
-      $("jobsBox").innerHTML = "暂无任务。在左侧提交你的第一条 H3 接力任务吧。";
-    } else {
-      $("jobsBox").innerHTML = data.jobs.map(j => {
-        const pct = Math.round((j.progress || 0) * 100);
-        let tel = {};
-        try { tel = JSON.parse(j.telemetry_json || "{}"); } catch {}
-        const vram = tel.vram_total_mb ? `显存 ${Math.round(tel.vram_used_mb/1024)}/${Math.round(tel.vram_total_mb/1024)} GB` : "";
-        const videoHtml = j.preview_key
-          ? `<video controls preload="metadata" src="/api/assets/${encodeURIComponent(j.preview_key)}?token=${encodeURIComponent(TOKEN)}"></video>`
-          : "";
-        const errHtml = j.error_msg ? `<pre class="err">${j.error_msg}</pre>` : "";
-        return `
-          <div class="job-item">
-            <div class="job-head">
-              <div><b>${j.title}</b> <span style="font-size:11px;color:var(--muted)">(${j.id})</span></div>
-              <span class="pill st-${j.status}">${j.status} · ${j.stage || j.phase}</span>
+    const pods = data.pods || [];
+    $("podsBox").innerHTML = pods.length
+      ? pods.map(p => `
+          <div class="pod-item">
+            <div>
+              <div style="font-family:var(--mono);font-weight:600">${esc(p.pod_id)} · ${esc(p.gpu_type)}</div>
+              <div style="color:var(--muted);font-size:11px;margin-top:3px">
+                ${esc(p.cloud_type)} · $${p.hourly_price}/hr · 状态: ${esc(p.status)} ${p.terminate_reason ? "(" + esc(p.terminate_reason) + ")" : ""}
+              </div>
             </div>
-            <div class="bar"><div style="width:${pct}%"></div></div>
-            <div class="meta">
-              <span>平台: ${j.platform}</span>
-              <span>进度: ${pct}%</span>
-              ${vram ? `<span>${vram}</span>` : ""}
-              ${j.pod_id ? `<span>Pod: ${j.pod_id}</span>` : ""}
-              <span>${j.detail || ""}</span>
-            </div>
-            ${videoHtml}
-            ${errHtml}
-          </div>
-        `;
-      }).join("");
-    }
+            ${p.status !== "terminated" ? `<button class="btn danger" onclick="killPod('${esc(p.pod_id)}')">立即销毁</button>` : ""}
+          </div>`).join("")
+      : '<div class="empty" style="padding:18px 8px">当前 0 个活跃 Runpod 实例（计费 $0.00）</div>';
+
+    const jobs = data.jobs || [];
+    $("jobCountChip").textContent = `${jobs.length} 条记录`;
+    const activePods = pods.filter(p => p.status !== "terminated").length;
+    $("badge-jobs").textContent = activePods > 0 ? `${jobs.length} · ${activePods}卡` : `${jobs.length}`;
+    $("jobsBox").innerHTML = jobs.length
+      ? jobs.map(j => {
+          const pct = Math.round((j.progress || 0) * 100);
+          let tel = {};
+          try { tel = JSON.parse(j.telemetry_json || "{}"); } catch {}
+          const vram = tel.vram_total_mb ? `${(tel.vram_used_mb/1024).toFixed(1)}/${(tel.vram_total_mb/1024).toFixed(0)} GB` : "";
+          const peakVram = tel.peak_vram_mb ? `峰值 ${(tel.peak_vram_mb/1024).toFixed(1)} GB` : "";
+          const telItems = [];
+          if (tel.gpu_name && tel.gpu_name !== "unknown") telItems.push(`<span class="tel-pill">GPU <b>${esc(tel.gpu_name)}</b></span>`);
+          if (vram) telItems.push(`<span class="tel-pill">显存 <b>${vram}</b> ${peakVram ? `(${peakVram})` : ""}</span>`);
+          if (tel.gpu_util_pct != null && tel.vram_total_mb) telItems.push(`<span class="tel-pill">占用 <b>${tel.gpu_util_pct}%</b></span>`);
+          if (tel.dl_speed_mbps) telItems.push(`<span class="tel-pill">下载 <b>${tel.dl_gb || 0} GB · ${tel.dl_speed_mbps} MB/s</b></span>`);
+          if (tel.current_node) telItems.push(`<span class="tel-pill">节点 <b>${esc(tel.current_node)}${tel.total_steps ? ` (${tel.step}/${tel.total_steps})` : ""}</b></span>`);
+          if (tel.total_elapsed_sec) telItems.push(`<span class="tel-pill">总耗时 <b>${tel.total_elapsed_sec}s</b></span>`);
+          const telStrip = telItems.length ? `<div class="tel-strip">${telItems.join("")}</div>` : "";
+          const pipeHtml = renderStagePipeline(tel.stages, j.status === "completed" ? "done" : "running");
+          let mediaHtml = "";
+          if (j.preview_key) {
+            const url = `/api/assets/${encodeURIComponent(j.preview_key)}?token=${encodeURIComponent(TOKEN)}`;
+            if (/\.(flac|wav|mp3|ogg|m4a)$/i.test(j.preview_key)) mediaHtml = `<audio controls src="${url}"></audio>`;
+            else if (/\.(png|jpg|jpeg|webp)$/i.test(j.preview_key)) mediaHtml = `<img class="preview" src="${url}" />`;
+            else mediaHtml = `<video controls preload="metadata" src="${url}"></video>`;
+          }
+          const stCls = j.status === "completed" ? "green" : (j.status === "failed" ? "amber" : "");
+          return `
+            <div class="job-card">
+              <div class="job-head">
+                <div><b>${esc(j.title)}</b> <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">${esc(j.id)}</span></div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span class="chip ${stCls}">${esc(j.status)} · ${esc(j.stage || j.phase)}</span>
+                  <button class="btn danger" onclick="purgeJob('${esc(j.id)}')">焚毁记录</button>
+                </div>
+              </div>
+              <div class="bar"><i style="width:${pct}%"></i></div>
+              <div class="job-meta">
+                <span>平台: ${esc(j.platform)}</span>
+                <span>工作流: ${esc(j.workflow)}</span>
+                <span>进度: ${pct}%</span>
+                ${j.pod_id ? `<span>Pod: ${esc(j.pod_id)}</span>` : ""}
+                <span>${esc(j.detail || "")}</span>
+              </div>
+              ${telStrip}
+              ${pipeHtml}
+              ${mediaHtml}
+              ${j.error_msg ? `<pre class="err">${esc(j.error_msg)}</pre>` : ""}
+            </div>`;
+        }).join("")
+      : `<div class="empty" style="padding:16px 8px 6px">当前暂无运行中任务（零残留模式下，历史任务落回本地后已自动焚毁）</div>${renderStagePipeline([], "pending")}`;
   } catch (e) {
-    $("jobsBox").innerHTML = `<span style="color:var(--err)">连接失败：${e.message}</span>`;
+    $("jobsBox").innerHTML = `<div class="empty" style="color:var(--rose)">连接失败：${esc(e.message)}</div>`;
   }
 }
 
-refresh();
-setInterval(refresh, 4000);
+function loadAll() {
+  if (!TOKEN) return;
+  loadWorkflows();
+  loadRunpodCatalog();
+  refreshOverview();
+}
+
+loadAll();
+setInterval(() => { if (!document.hidden && TOKEN) refreshOverview(); }, 4000);
 </script>
 </body>
 </html>

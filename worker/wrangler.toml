@@ -19,9 +19,7 @@ binding = "GPU_JOBS"
 bucket_name = "gpu-jobs"
 
 [vars]
-# Update this after pushing your GHCR image (option A).
-# If left empty or set to "runpod/pytorch:...", worker falls back to inline bootstrap.
-RUNPOD_IMAGE_NAME = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
+RUNPOD_IMAGE_NAME = "ghcr.io/kynhmuangquangghoong-creator/h3-cloud-workbench:latest"
 POD_MAX_RUNTIME_MIN = "90"
 POD_STALE_HEARTBEAT_MIN = "15"
 

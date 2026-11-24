@@ -1,0 +1,166 @@
+{
+  "schema_version": 3,
+  "updated_at": "2026-11-23T19:08:00+08:00",
+  "workflows": [
+    {
+      "id": "h3_relay",
+      "category": "video",
+      "title": "MiniMax H3 无限流接力 (Goldfish Relay)",
+      "version": "v1",
+      "recommended_gpu": "RTX 5090 32GB / A100 80GB / RTX PRO 6000 96GB",
+      "total_weights_gb": 43.7,
+      "platforms": ["runpod", "colab", "local5090"],
+      "description": "1:1 复刻 5090 金鱼二采 + 潜在空间多段接力，支持 2–8 段连续音画生成与 2K 超分。",
+      "pipeline": [
+        { "role": "语义与视觉编码", "model": "Qwen3-VL 32B NVFP4 AWQ", "size": "15.69 GB", "tag": "core", "purpose": "解析多段中文/英文镜头提示词与参考图视觉特征，输出对齐的时间轴条件向量" },
+        { "role": "动态与质感增强", "model": "DMAD v4 + MysticXXX LoRA", "size": "2.40 GB", "tag": "lora", "purpose": "注入高动态镜头张力与皮肤/光影细节，抑制长镜头画面崩坏与伪影" },
+        { "role": "核心视频扩散", "model": "MiniMax H3 Hybrid INT8", "size": "20.97 GB", "tag": "core", "purpose": "金鱼二采主生成骨架，统一支持首尾帧控制与 1–9 张参考图人物一致性" },
+        { "role": "无限流潜空间桥接", "model": "H3-Latent-Relay + SelfLift", "size": "插件节点", "tag": "node", "purpose": "截取前段尾帧潜空间状态并无损注入下段开头，实现 2–8 段无缝长视频续接" },
+        { "role": "潜空间超分放大", "model": "LMS v0.1 + 3D Conv Upscaler", "size": "1.19 GB", "tag": "2K按需", "purpose": "在潜空间直接将 768p 放大至 2048×1152，保留锐利纹理、避免像素级涂抹" },
+        { "role": "音画同步解码", "model": "H3 Video VAE INT8 + Audio VAE FP32", "size": "3.42 GB", "tag": "core", "purpose": "并行解码高清视频帧与 48kHz 同步音频轨，由 VideoHelperSuite 封装成片" }
+      ]
+    },
+    {
+      "id": "audio_ace_sft",
+      "category": "audio",
+      "title": "ACE-Step 1.5 XL SFT 音乐生成",
+      "version": "v1",
+      "recommended_gpu": "RTX PRO 4500 32GB ($0.34/hr) / RTX 4090",
+      "total_weights_gb": 15.6,
+      "platforms": ["runpod", "colab", "local5090"],
+      "description": "高质量风格/歌词驱动的完整音乐生成，输出 48kHz 立体声 FLAC。",
+      "pipeline": [
+        { "role": "标签与歌词理解", "model": "Qwen 0.6B + Qwen 4B LM", "size": "8.70 GB", "tag": "core", "purpose": "双编码器协同解析曲风标签、情绪与多段歌词韵律，规划整曲结构" },
+        { "role": "音乐扩散主模", "model": "ACE-Step 1.5 XL SFT BF16", "size": "6.60 GB", "tag": "core", "purpose": "高精度全步数音乐扩散主干，负责乐器编配、人声演唱与和声走向" },
+        { "role": "音频波形解码", "model": "ACE-Step 1.5 Audio VAE", "size": "0.30 GB", "tag": "core", "purpose": "将潜空间声学特征重建为 48kHz 高保真立体声 FLAC 音频" }
+      ]
+    },
+    {
+      "id": "audio_ace_turbo",
+      "category": "audio",
+      "title": "ACE-Step 1.5 XL Turbo 快速音乐",
+      "version": "v1",
+      "recommended_gpu": "RTX PRO 4500 32GB ($0.34/hr) / RTX 4090",
+      "total_weights_gb": 15.6,
+      "platforms": ["runpod", "colab", "local5090"],
+      "description": "少步数蒸馏加速版，适合快速试听曲风、旋律灵感与批量出小样。",
+      "pipeline": [
+        { "role": "标签与歌词理解", "model": "Qwen 0.6B + Qwen 4B LM", "size": "8.70 GB", "tag": "core", "purpose": "解析风格提示词与歌词结构，与 SFT 版共享同一套文本编码器" },
+        { "role": "极速蒸馏扩散", "model": "ACE-Step 1.5 XL Turbo BF16", "size": "6.60 GB", "tag": "core", "purpose": "蒸馏步数压缩至极低，数秒内快速生成可试听的完整编曲小样" },
+        { "role": "音频波形解码", "model": "ACE-Step 1.5 Audio VAE", "size": "0.30 GB", "tag": "core", "purpose": "快速还原为 48kHz 立体声 FLAC 输出" }
+      ]
+    },
+    {
+      "id": "audio_yue2_music",
+      "category": "audio",
+      "title": "YuE2 3B 原创歌曲创作",
+      "version": "v1",
+      "recommended_gpu": "RTX PRO 4500 32GB ($0.34/hr) / RTX 4090",
+      "total_weights_gb": 4.4,
+      "platforms": ["runpod", "colab", "local5090"],
+      "description": "轻量 3B 音乐大模型，支持先规划 ABC 旋律乐谱再渲染完整人声歌曲。",
+      "pipeline": [
+        { "role": "风格与乐谱规划", "model": "ComfyUI nodes_yue2 (ABC)", "size": "内置节点", "tag": "node", "purpose": "可选将歌词与风格转为 ABC 记谱法，锁定主旋律与和弦进行骨架" },
+        { "role": "端到端歌曲生成", "model": "YuE2 3B INT8 ConvRot", "size": "3.50 GB", "tag": "core", "purpose": "自回归生成完整人声演唱与多乐器伴奏序列，体积极小启动极快" },
+        { "role": "声学特征编码", "model": "SheetSage2 BF16", "size": "0.90 GB", "tag": "core", "purpose": "提取节拍与乐理对齐信息，稳定副歌衔接与音准" }
+      ]
+    },
+    {
+      "id": "audio_yue2_cover",
+      "category": "audio",
+      "title": "YuE2 3B 参考音频翻唱",
+      "version": "v1",
+      "recommended_gpu": "RTX PRO 4500 32GB ($0.34/hr) / RTX 4090",
+      "total_weights_gb": 4.4,
+      "platforms": ["runpod", "colab", "local5090"],
+      "description": "上传参考音频提取旋律乐谱，按全新风格与配器重新翻唱。",
+      "pipeline": [
+        { "role": "参考旋律扒谱", "model": "SheetSage2 BF16", "size": "0.90 GB", "tag": "core", "purpose": "从参考音频中提取核心主旋律与和弦走向，转换为可编辑 ABC 乐谱" },
+        { "role": "新风格重演渲染", "model": "YuE2 3B INT8 ConvRot", "size": "3.50 GB", "tag": "core", "purpose": "严格沿着提取的旋律骨架，用目标曲风与新歌词完成翻唱渲染" }
+      ]
+    },
+    {
+      "id": "audio_sfx",
+      "category": "audio",
+      "title": "Stable Audio 3 Small 立体声音效",
+      "version": "v1",
+      "recommended_gpu": "RTX PRO 4500 32GB ($0.34/hr)",
+      "total_weights_gb": 3.5,
+      "platforms": ["runpod", "colab", "local5090"],
+      "description": "极速轻量环境音/拟音/电影转场音效生成（44.1kHz 立体声，仅 3.5 GB 权重）。",
+      "pipeline": [
+        { "role": "音效语义编码", "model": "T5Gemma B-B UL2", "size": "1.10 GB", "tag": "core", "purpose": "精准理解物理材质、空间混响与动作节奏等拟音描述词" },
+        { "role": "声场扩散合成", "model": "Stable Audio 3 Small SFX", "size": "2.40 GB", "tag": "core", "purpose": "按指定时长（1–45s）直接生成高动态电影级 44.1kHz 立体声音效" }
+      ]
+    },
+    {
+      "id": "audio_tts_design",
+      "category": "audio",
+      "title": "Qwen3-TTS 声线设计",
+      "version": "v1",
+      "recommended_gpu": "RTX PRO 4500 32GB ($0.34/hr)",
+      "total_weights_gb": 3.9,
+      "platforms": ["runpod", "colab", "local5090"],
+      "description": "用自然语言捏出全新角色音色、年龄感与情绪，并合成配音。",
+      "pipeline": [
+        { "role": "音色指令生成", "model": "Qwen3-TTS 1.7B VoiceDesign", "size": "3.50 GB", "tag": "core", "purpose": "根据自然语言音色描述（如沉稳/少年/沙哑）生成目标说话人声学 token" },
+        { "role": "高保真声码还原", "model": "Qwen3-TTS Tokenizer 12Hz", "size": "0.40 GB", "tag": "core", "purpose": "将 12Hz 离散语音 token 高保真解码为 24kHz 清晰人声 WAV" }
+      ]
+    },
+    {
+      "id": "audio_tts_clone",
+      "category": "audio",
+      "title": "Qwen3-TTS 声音克隆",
+      "version": "v1",
+      "recommended_gpu": "RTX PRO 4500 32GB ($0.34/hr)",
+      "total_weights_gb": 3.9,
+      "platforms": ["runpod", "colab", "local5090"],
+      "description": "上传授权参考音频复刻说话人音色，支持 ICL 参考台词增强。",
+      "pipeline": [
+        { "role": "声纹提取与克隆", "model": "Qwen3-TTS 1.7B Base", "size": "3.50 GB", "tag": "core", "purpose": "从 3–20 秒参考干声中提取音色与韵律特征，按目标台词合成克隆语音" },
+        { "role": "高保真声码还原", "model": "Qwen3-TTS Tokenizer 12Hz", "size": "0.40 GB", "tag": "core", "purpose": "将声学序列重建为自然无电音的 24kHz WAV 人声" }
+      ]
+    },
+    {
+      "id": "audio_asr",
+      "category": "audio",
+      "title": "Qwen3-ASR 1.7B 语音转写",
+      "version": "v1",
+      "recommended_gpu": "RTX PRO 4500 32GB ($0.34/hr)",
+      "total_weights_gb": 3.5,
+      "platforms": ["runpod", "colab", "local5090"],
+      "description": "高精度中/日/英多语种语音转文字，用于克隆质检与字幕提取。",
+      "pipeline": [
+        { "role": "端到端语音识别", "model": "Qwen3-ASR 1.7B HF", "size": "3.50 GB", "tag": "core", "purpose": "直接将输入音频转写为带标点的精准文本，支持提示词纠偏" }
+      ]
+    },
+    {
+      "id": "audio_stems",
+      "category": "audio",
+      "title": "Demucs htdemucs 四轨分离",
+      "version": "v1",
+      "recommended_gpu": "RTX PRO 4500 32GB ($0.34/hr)",
+      "total_weights_gb": 0.1,
+      "platforms": ["runpod", "colab", "local5090"],
+      "description": "将混音歌曲无损分离为人声、贝斯、鼓与其他乐器 4 条独立 FLAC 音轨。",
+      "pipeline": [
+        { "role": "混合频谱时域分离", "model": "Demucs htdemucs", "size": "0.08 GB", "tag": "runtime", "purpose": "Hybrid Transformer 架构精准剥离 Vocals / Bass / Drums / Other 四条干声" }
+      ]
+    },
+    {
+      "id": "h3_image",
+      "category": "image",
+      "title": "MiniMax-H3-Image 高清多图生图",
+      "version": "v1",
+      "recommended_gpu": "Colab Pro+ A100/L4 + Drive 20TB",
+      "total_weights_gb": 140.0,
+      "platforms": ["colab", "local5090"],
+      "description": "支持 2K (2048×2048) / 4K UHD (3840×2160) / 5.5K 宽幅及最多 16 张参考图，权重常驻 20TB Drive 零月租。",
+      "pipeline": [
+        { "role": "多图语义编码", "model": "MiniMax-H3 Text Encoder", "size": "~35 GB", "tag": "Drive常驻", "purpose": "联合理解超长提示词与最多 16 张参考图的人物、服饰与构图关系" },
+        { "role": "逐层卸载扩散引擎", "model": "sglang[diffusion] + H3-Image DiT", "size": "~95 GB", "tag": "Drive常驻", "purpose": "通过 layerwise-offload 将峰值显存压至 12.5 GB，单卡直出 5.5K 原生分辨率" },
+        { "role": "高清像素解码与裁切", "model": "MiniMax-H3 Image VAE", "size": "~10 GB", "tag": "Drive常驻", "purpose": "还原超高频纹理细节，对 UHD 3840×2176 自动居中裁切为标准 3840×2160 PNG" }
+      ]
+    }
+  ]
+}
