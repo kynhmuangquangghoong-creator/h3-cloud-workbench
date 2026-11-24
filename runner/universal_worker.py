@@ -30,6 +30,7 @@ from pathlib import Path
 
 os.environ.setdefault("HF_XET_HIGH_PERFORMANCE", "1")
 os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "1")
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 COMFY_URL = "http://127.0.0.1:8188"
 COMFY_WS_URL = "ws://127.0.0.1:8188/ws"
@@ -476,12 +477,39 @@ def is_comfyui_up() -> bool:
 
 def launch_comfyui_async(comfy_dir: Path, log_path: Path) -> subprocess.Popen:
     log_f = open(log_path, "w", encoding="utf-8")
+    env = os.environ.copy()
+    env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     return subprocess.Popen(
-        [sys.executable, "-u", str(comfy_dir / "main.py"), "--listen", "127.0.0.1", "--port", "8188", "--disable-auto-launch"],
+        [
+            sys.executable, "-u", str(comfy_dir / "main.py"),
+            "--listen", "127.0.0.1", "--port", "8188",
+            "--disable-auto-launch",
+            "--lowvram", "--reserve-vram", "2",
+            "--preview-method", "none",
+        ],
         cwd=str(comfy_dir),
+        env=env,
         stdout=log_f,
         stderr=subprocess.STDOUT,
     )
+
+
+def free_comfyui_memory() -> None:
+    """Flush ComfyUI VRAM cache & unload inactive models between relay segments to prevent OOM."""
+    try:
+        payload = json.dumps({"unload_models": True, "free_memory": True}).encode("utf-8")
+        req = urllib.request.Request(
+            f"{COMFY_URL}/free",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            resp.read()
+        time.sleep(1.0)
+        print("[VRAM] Flushed ComfyUI VRAM cache between segments (/free)")
+    except Exception as exc:
+        print(f"[WARN] /free VRAM flush failed: {exc}")
 
 
 def wait_comfyui_ready(proc: subprocess.Popen, log_path: Path, timeout_sec: int = 180) -> float:
@@ -821,6 +849,8 @@ def execute_h3_job(
             segment_mp4s.append(mp4s[-1])
         segment_timings.append({"segment": stage + 1, "elapsed_sec": seg_sec})
         tracker.finish(sid, detail=f"第 {stage + 1} 段完成", meta=f"{seg_sec}s")
+        if stage + 1 < len(graphs):
+            free_comfyui_memory()
 
     if not segment_mp4s:
         raise RuntimeError("ComfyUI finished without producing any segment MP4 files.")

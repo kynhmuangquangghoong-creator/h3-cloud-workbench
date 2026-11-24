@@ -46,6 +46,9 @@ const GPU_PRIORITY_MAP = {
   ],
   "rtx5090": [
     { id: "NVIDIA GeForce RTX 5090", cloud: "COMMUNITY", price: 0.69 },
+  ],
+  "rtx5090_any": [
+    { id: "NVIDIA GeForce RTX 5090", cloud: "COMMUNITY", price: 0.69 },
     { id: "NVIDIA GeForce RTX 5090", cloud: "SECURE", price: 1.39 },
   ],
   "a100": [
