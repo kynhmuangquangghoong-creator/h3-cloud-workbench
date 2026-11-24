@@ -23,7 +23,7 @@
     --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; min-height: 100vh; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; min-height: 100vh; overflow-x: hidden; }
   body {
     background-image:
       radial-gradient(circle at 12% 0%, rgba(56, 189, 248, 0.09), transparent 36%),
@@ -128,6 +128,18 @@
   .spec-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 7px 10px; border-radius: 8px; background: rgba(9, 13, 22, 0.7); border: 1px solid rgba(148,163,184,.08); }
   .spec-row span:first-child { color: var(--muted); }
   .spec-row b { font-family: var(--mono); font-weight: 600; color: var(--text); }
+  .l5090-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+  .l5090-card {
+    background: rgba(9, 13, 22, 0.85); border: 1px solid var(--border); border-radius: 10px;
+    padding: 9px 11px; display: flex; flex-direction: column; gap: 5px;
+  }
+  .l5090-card.idle { border-color: rgba(52, 211, 153, 0.34); }
+  .l5090-card.busy { border-color: rgba(251, 191, 36, 0.45); background: rgba(34, 24, 12, 0.45); }
+  .l5090-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11.5px; font-weight: 650; }
+  .l5090-bar { height: 4px; background: rgba(148, 163, 184, 0.16); border-radius: 999px; overflow: hidden; }
+  .l5090-bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--emerald), var(--cyan)); }
+  .l5090-card.busy .l5090-bar > i { background: linear-gradient(90deg, var(--amber), var(--rose)); }
+  .l5090-sub { display: flex; justify-content: space-between; font-size: 10.5px; font-family: var(--mono); color: var(--muted); }
 
   /* Section 2: Workflow Pipeline Long-Lines */
   .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -190,68 +202,73 @@
     border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 7px solid var(--indigo);
   }
 
-  /* Section 3: Live Jobs & Pods */
-  .exec-grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; }
-  @media (max-width: 1024px) { .exec-grid { grid-template-columns: 1fr; } }
-  .pod-item {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    padding: 10px 12px; border-radius: 10px; background: rgba(9, 13, 22, 0.8);
-    border: 1px solid var(--border); margin-bottom: 8px; font-size: 12px;
+  /* Section 3: Live Jobs & Pods — clean full-width vertical layout (zero horizontal overflow) */
+  .exec-stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .pods-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    padding: 12px 16px;
   }
+  .pods-list { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; flex: 1; min-width: 0; }
+  .pod-pill {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 7px 12px; border-radius: 10px;
+    background: rgba(9, 13, 22, 0.85); border: 1px solid var(--border); font-size: 12px;
+  }
+  .pod-pill.active { border-color: rgba(56, 189, 248, 0.45); background: rgba(14, 34, 54, 0.72); }
+  .pod-pill.terminated { opacity: 0.72; }
   .job-card {
-    background: rgba(9, 13, 22, 0.82); border: 1px solid var(--border); border-radius: 12px;
-    padding: 13px 16px; margin-bottom: 10px;
+    background: linear-gradient(180deg, rgba(16, 23, 38, 0.92), rgba(10, 14, 24, 0.96));
+    border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 14px;
+    padding: 16px 18px; margin-bottom: 12px; min-width: 0;
   }
   .job-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .bar { height: 5px; background: rgba(148, 163, 184, 0.14); border-radius: 999px; overflow: hidden; margin: 9px 0; }
+  .bar { height: 6px; background: rgba(148, 163, 184, 0.14); border-radius: 999px; overflow: hidden; margin: 11px 0 9px; }
   .bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--indigo)); transition: width 0.3s; }
-  .job-meta { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11.5px; color: var(--muted); font-family: var(--mono); }
+  .job-meta { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); font-family: var(--mono); }
   .tel-strip {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-    margin: 10px 0 6px; padding: 8px 11px; border-radius: 9px;
-    background: rgba(15, 23, 42, 0.72); border: 1px solid rgba(56, 189, 248, 0.16);
-    font-size: 11.5px; font-family: var(--mono); color: #cbd5e1;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    margin: 12px 0 10px; padding: 9px 12px; border-radius: 10px;
+    background: rgba(9, 14, 26, 0.85); border: 1px solid rgba(56, 189, 248, 0.2);
+    font-size: 12px; font-family: var(--mono); color: #cbd5e1;
   }
-  .tel-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.04); }
+  .tel-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 6px; background: rgba(255,255,255,0.05); }
   .tel-pill b { color: var(--cyan); }
-  .exec-pipe-scroll { overflow-x: auto; padding: 8px 2px 6px; margin-top: 4px; scrollbar-width: thin; scrollbar-color: rgba(148,163,184,0.25) transparent; }
-  .exec-pipe { display: flex; align-items: stretch; gap: 0; min-width: max-content; }
-  .exec-node {
-    width: 196px; flex: none; padding: 10px 12px; border-radius: 10px;
-    background: rgba(15, 22, 36, 0.85); border: 1px solid rgba(148, 163, 184, 0.16);
-    display: flex; flex-direction: column; gap: 5px; transition: all 0.2s;
+  .exec-pipe-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+    gap: 10px; margin-top: 10px; width: 100%;
   }
-  .exec-node.st-pending { opacity: 0.56; }
+  .exec-node {
+    padding: 12px 13px; border-radius: 11px; min-width: 0;
+    background: rgba(18, 26, 42, 0.85); border: 1px solid rgba(148, 163, 184, 0.18);
+    display: flex; flex-direction: column; gap: 6px; transition: all 0.2s;
+  }
+  .exec-node.st-pending { background: rgba(13, 19, 32, 0.72); border-color: rgba(148, 163, 184, 0.14); }
   .exec-node.st-running {
-    border-color: var(--cyan); background: linear-gradient(180deg, rgba(14, 42, 66, 0.92), rgba(11, 20, 36, 0.95));
-    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.25), 0 0 18px rgba(56, 189, 248, 0.16);
+    border-color: var(--cyan); background: linear-gradient(180deg, rgba(14, 46, 72, 0.94), rgba(11, 22, 40, 0.96));
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.28), 0 4px 18px rgba(56, 189, 248, 0.16);
     animation: nodePulse 2s ease-in-out infinite;
   }
-  .exec-node.st-done { border-color: rgba(52, 211, 153, 0.42); background: rgba(12, 32, 32, 0.65); }
-  .exec-node.st-error { border-color: rgba(251, 113, 133, 0.55); background: rgba(52, 16, 26, 0.65); }
+  .exec-node.st-done { border-color: rgba(52, 211, 153, 0.45); background: rgba(12, 36, 34, 0.72); }
+  .exec-node.st-error { border-color: rgba(251, 113, 133, 0.6); background: rgba(56, 16, 28, 0.72); }
   @keyframes nodePulse {
-    0%, 100% { box-shadow: 0 0 0 1px rgba(56,189,248,.22), 0 0 12px rgba(56,189,248,.12); }
-    50% { box-shadow: 0 0 0 1px rgba(56,189,248,.55), 0 0 22px rgba(56,189,248,.28); }
+    0%, 100% { box-shadow: 0 0 0 1px rgba(56,189,248,.24), 0 0 10px rgba(56,189,248,.12); }
+    50% { box-shadow: 0 0 0 1px rgba(56,189,248,.58), 0 0 20px rgba(56,189,248,.28); }
   }
-  .exec-node-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11px; font-weight: 650; }
+  .exec-node-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11.5px; font-weight: 600; }
   .exec-st { display: inline-flex; align-items: center; gap: 5px; }
   .st-running .exec-st { color: var(--cyan); }
   .st-done .exec-st { color: var(--emerald); }
   .st-error .exec-st { color: var(--rose); }
-  .st-pending .exec-st { color: var(--dim); }
-  .exec-time { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
-  .exec-title { font-size: 12px; font-weight: 600; color: #f1f5f9; line-height: 1.3; }
-  .exec-detail { font-size: 11px; color: #94a3b8; line-height: 1.4; word-break: break-word; }
+  .st-pending .exec-st { color: var(--muted); }
+  .exec-time { font-family: var(--mono); font-size: 11px; color: #cbd5e1; }
+  .exec-title { font-size: 13px; font-weight: 650; color: #f8fafc; line-height: 1.35; }
+  .exec-detail { font-size: 11.5px; color: #94a3b8; line-height: 1.45; word-break: break-word; }
   .exec-meta-tag {
-    margin-top: auto; align-self: flex-start; font-family: var(--mono); font-size: 10px;
-    padding: 2px 6px; border-radius: 5px; background: rgba(56, 189, 248, 0.12); color: #bae6fd;
+    margin-top: auto; align-self: flex-start; font-family: var(--mono); font-size: 10.5px;
+    padding: 2px 7px; border-radius: 5px; background: rgba(56, 189, 248, 0.14); color: #bae6fd;
   }
-  .st-done .exec-meta-tag { background: rgba(52, 211, 153, 0.14); color: #a7f3d0; }
-  .exec-arrow { width: 24px; flex: none; display: flex; align-items: center; justify-content: center; position: relative; }
-  .exec-arrow::before { content: ""; position: absolute; left: 0; right: 5px; height: 2px; background: rgba(148,163,184,0.28); }
-  .exec-arrow::after { content: ""; position: absolute; right: 1px; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 6px solid rgba(148,163,184,0.42); }
-  .exec-arrow.done::before { background: linear-gradient(90deg, var(--emerald), var(--cyan)); }
-  .exec-arrow.done::after { border-left-color: var(--cyan); }
+  .st-done .exec-meta-tag { background: rgba(52, 211, 153, 0.16); color: #a7f3d0; }
+  .st-pending .exec-meta-tag { background: rgba(148, 163, 184, 0.12); color: #94a3b8; }
   video, img.preview { max-width: 100%; max-height: 360px; border-radius: 10px; margin-top: 10px; background: #000; }
   audio { width: 100%; margin-top: 10px; }
   pre.err { background: rgba(251, 113, 133, 0.1); border: 1px solid rgba(251, 113, 133, 0.25); color: #fda4af; padding: 9px 12px; border-radius: 8px; font-size: 11px; overflow-x: auto; white-space: pre-wrap; margin-top: 8px; }
@@ -337,14 +354,16 @@
       <!-- Local 5090 Ephemeral -->
       <div class="card">
         <div class="fleet-head">
-          <div class="fleet-name">5090 临时即用即焚节点 <span class="chip amber">0 硬盘缓存</span></div>
+          <div class="fleet-name">5090 临时即用即焚节点 <span class="chip amber" id="l5090StatusChip">4 卡状态</span></div>
+          <button class="btn" style="padding:4px 10px;font-size:11.5px" onclick="loadLocal5090Gpus()">刷新 4 卡</button>
         </div>
-        <div class="fleet-meta">宿主机大模型已全清空释放，随时可用单行 <code>docker run --rm</code> 借用显卡，跑完自动销毁零残留。</div>
+        <div class="fleet-meta">自动托管 WireProxy 隧道 + 单行 <code>docker run --rm</code> 借用空闲卡，跑完自动销毁并关隧道。</div>
         <div class="spec-list">
-          <div class="spec-row"><span>硬件规格</span><b>4 × RTX 5090 (32 GB)</b></div>
-          <div class="spec-row"><span>远程触发器</span><b>run_5090_once.ps1</b></div>
-          <div class="spec-row"><span>容器镜像</span><b>ghcr.io/.../h3-cloud-workbench</b></div>
+          <div class="spec-row"><span>自动隧道入口</span><b>run_5090_auto.py</b></div>
           <div class="spec-row"><span>自动退出清理</span><b>EXIT_ON_IDLE=1 (--rm)</b></div>
+        </div>
+        <div class="l5090-grid" id="l5090Grid">
+          <div class="empty" style="grid-column:1/-1;padding:12px">等待读取 4 × RTX 5090 实时显存与占用...</div>
         </div>
       </div>
     </div>
@@ -371,21 +390,23 @@
   <section class="tab-page" id="page-jobs">
     <div class="sec-head">
       <h2>任务列表、执行遥测与实例看门狗</h2>
-      <div class="hint">按单自动拉回本地后立即焚毁云端记录 · 每 4 秒同步队列心跳（24h 兜底自清）</div>
+      <div class="hint">统一监控 Runpod / 本地 5090 / Colab 任务 · 按单落回本地后自动焚毁云端（每 4 秒同步）</div>
     </div>
 
-    <div class="exec-grid">
-      <div class="card">
-        <div class="fleet-head" style="margin-bottom:10px">
-          <div class="fleet-name">活跃 Runpod 实例 & 看门狗</div>
+    <div class="exec-stack">
+      <div class="card pods-bar">
+        <div style="display:flex;align-items:center;gap:10px;flex:none">
+          <div class="fleet-name" style="font-size:13.5px">算力实例与看门狗</div>
           <span class="chip muted">Cron 10m</span>
         </div>
-        <div id="podsBox" class="empty" style="padding:18px 8px">等待鉴权...</div>
+        <div id="podsBox" class="pods-list">
+          <span style="color:var(--muted);font-size:12px">等待鉴权...</span>
+        </div>
       </div>
 
       <div class="card">
-        <div class="fleet-head" style="margin-bottom:10px">
-          <div class="fleet-name">实时任务队列（零残留模式）</div>
+        <div class="fleet-head" style="margin-bottom:12px">
+          <div class="fleet-name">实时任务队列（Runpod + 本地 5090 + Colab · 零残留模式）</div>
           <span class="chip muted" id="jobCountChip">0 条记录</span>
         </div>
         <div id="jobsBox" class="empty">输入 Token 后显示实时任务与执行记录</div>
@@ -561,34 +582,30 @@ async function purgeJob(jobId) {
 
 function renderStagePipeline(stages, fallbackStatus = "pending") {
   const list = Array.isArray(stages) && stages.length ? stages : [
-    { id: "pod_boot", label: "建卡与容器就绪", status: fallbackStatus, elapsed_sec: null, detail: "拉起 Runpod 零热卷实例", meta: "社区按秒计费" },
-    { id: "parallel_init", label: "并行冷启 (ComfyUI+权重+素材)", status: "pending", elapsed_sec: null, detail: "ComfyUI 启动与 4×16 拉权重并发", meta: "隐藏 ~30s 启动" },
-    { id: "seg_1", label: "第 1/2 段采样推理", status: "pending", elapsed_sec: null, detail: "实时捕获 ComfyUI 节点与步数", meta: "WebSocket 遥测" },
-    { id: "seg_2", label: "第 2/2 段接力推理", status: "pending", elapsed_sec: null, detail: "Latent 接力连续生成", meta: "峰值显存监控" },
-    { id: "stitch_upload", label: "拼接与回传中转", status: "pending", elapsed_sec: null, detail: "无损拼接并回传 R2", meta: "≤19MB 原画" },
-    { id: "shutdown", label: "本地拉回与秒级停表", status: "pending", elapsed_sec: null, detail: "落盘 E:\\GPU_Outputs 后焚毁云端", meta: "10s 自动停表" },
+    { id: "pod_boot", label: "实例 / 容器就绪", status: fallbackStatus, elapsed_sec: null, detail: "拉起 Runpod 或本地 5090 临时容器", meta: "按需启停" },
+    { id: "parallel_init", label: "并行冷启 (ComfyUI+权重)", status: "pending", elapsed_sec: null, detail: "ComfyUI 与 4×16 拉权重并发", meta: "~22s 极速" },
+    { id: "seg_1", label: "第 1/2 段采样推理", status: "pending", elapsed_sec: null, detail: "WebSocket 实时节点与步数", meta: "低显存保护" },
+    { id: "seg_2", label: "第 2/2 段接力推理", status: "pending", elapsed_sec: null, detail: "段间清显存后 Latent 接力", meta: "峰值监控" },
+    { id: "stitch_upload", label: "拼接与回传中转", status: "pending", elapsed_sec: null, detail: "无损拼接并回传原画 MP4", meta: "≤19MB 原画" },
+    { id: "shutdown", label: "落回本地与秒级停表", status: "pending", elapsed_sec: null, detail: "落盘 E:\\GPU_Outputs 后焚毁云端", meta: "0 残留" },
   ];
   const stIcon = { done: "✓ 已完成", running: "● 执行中", error: "✕ 异常", pending: "○ 等待中" };
   return `
-    <div class="exec-pipe-scroll">
-      <div class="exec-pipe">
-        ${list.map((s, i) => {
-          const st = s.status || "pending";
-          const prevDone = i > 0 && (list[i - 1].status === "done");
-          const arrow = i > 0 ? `<div class="exec-arrow ${prevDone ? "done" : ""}" aria-hidden="true"></div>` : "";
-          const tStr = s.elapsed_sec != null ? `${Number(s.elapsed_sec).toFixed(1)}s` : "";
-          return `${arrow}
-            <div class="exec-node st-${esc(st)}">
-              <div class="exec-node-top">
-                <span class="exec-st">${stIcon[st] || esc(st)}</span>
-                <span class="exec-time">${esc(tStr)}</span>
-              </div>
-              <div class="exec-title">${i + 1}. ${esc(s.label || s.id)}</div>
-              ${s.detail ? `<div class="exec-detail">${esc(s.detail)}</div>` : ""}
-              ${s.meta ? `<div class="exec-meta-tag">${esc(s.meta)}</div>` : ""}
-            </div>`;
-        }).join("")}
-      </div>
+    <div class="exec-pipe-grid">
+      ${list.map((s, i) => {
+        const st = s.status || "pending";
+        const tStr = s.elapsed_sec != null ? `${Number(s.elapsed_sec).toFixed(1)}s` : "";
+        return `
+          <div class="exec-node st-${esc(st)}">
+            <div class="exec-node-top">
+              <span class="exec-st">${stIcon[st] || esc(st)}</span>
+              <span class="exec-time">${esc(tStr)}</span>
+            </div>
+            <div class="exec-title">${i + 1}. ${esc(s.label || s.id)}</div>
+            ${s.detail ? `<div class="exec-detail">${esc(s.detail)}</div>` : ""}
+            ${s.meta ? `<div class="exec-meta-tag">${esc(s.meta)}</div>` : ""}
+          </div>`;
+      }).join("")}
     </div>`;
 }
 
@@ -602,18 +619,15 @@ async function refreshOverview() {
       $("imgChip").className = "chip";
     }
     const pods = data.pods || [];
-    $("podsBox").innerHTML = pods.length
-      ? pods.map(p => `
-          <div class="pod-item">
-            <div>
-              <div style="font-family:var(--mono);font-weight:600">${esc(p.pod_id)} · ${esc(p.gpu_type)}</div>
-              <div style="color:var(--muted);font-size:11px;margin-top:3px">
-                ${esc(p.cloud_type)} · $${p.hourly_price}/hr · 状态: ${esc(p.status)} ${p.terminate_reason ? "(" + esc(p.terminate_reason) + ")" : ""}
-              </div>
-            </div>
-            ${p.status !== "terminated" ? `<button class="btn danger" onclick="killPod('${esc(p.pod_id)}')">立即销毁</button>` : ""}
+    const activePodsList = pods.filter(p => p.status !== "terminated");
+    $("podsBox").innerHTML = activePodsList.length
+      ? activePodsList.map(p => `
+          <div class="pod-pill active">
+            <span style="font-family:var(--mono);font-weight:600;color:var(--cyan)">● ${esc(p.gpu_type)}</span>
+            <span style="color:var(--muted);font-family:var(--mono)">${esc(p.pod_id)} · ${esc(p.cloud_type)} $${p.hourly_price}/hr · ${esc(p.status)}</span>
+            <button class="btn danger" onclick="killPod('${esc(p.pod_id)}')">立即销毁</button>
           </div>`).join("")
-      : '<div class="empty" style="padding:18px 8px">当前 0 个活跃 Runpod 实例（计费 $0.00）</div>';
+      : '<span class="chip green"><i class="dot"></i>当前 0 个付费云实例运行中（实时计费 $0.00）</span>';
 
     const jobs = data.jobs || [];
     $("jobCountChip").textContent = `${jobs.length} 条记录`;
@@ -643,10 +657,13 @@ async function refreshOverview() {
             else mediaHtml = `<video controls preload="metadata" src="${url}"></video>`;
           }
           const stCls = j.status === "completed" ? "green" : (j.status === "failed" ? "amber" : "");
+          const platBadge = j.platform === "local5090"
+            ? '<span class="chip amber">本地 5090 · $0</span>'
+            : (j.platform === "colab" ? '<span class="chip green">Colab Pro+</span>' : '<span class="chip">Runpod 云端</span>');
           return `
             <div class="job-card">
               <div class="job-head">
-                <div><b>${esc(j.title)}</b> <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">${esc(j.id)}</span></div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${platBadge} <b>${esc(j.title)}</b> <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">${esc(j.id)}</span></div>
                 <div style="display:flex;align-items:center;gap:8px">
                   <span class="chip ${stCls}">${esc(j.status)} · ${esc(j.stage || j.phase)}</span>
                   <button class="btn danger" onclick="purgeJob('${esc(j.id)}')">焚毁记录</button>
@@ -672,10 +689,51 @@ async function refreshOverview() {
   }
 }
 
+async function loadLocal5090Gpus() {
+  if (!TOKEN) return;
+  try {
+    const data = await api("/api/local5090/gpus");
+    const gpus = data.gpus || [];
+    if (!gpus.length) {
+      $("l5090StatusChip").textContent = "待上报";
+      $("l5090Grid").innerHTML = '<div class="empty" style="grid-column:1/-1;padding:12px">暂无 4 卡上报数据（执行 run_5090_auto.py --report-gpus 即可刷新）</div>';
+      return;
+    }
+    const idleCount = gpus.filter(g => (g.vram_used_mb || 0) < 1500 && (g.util_pct || 0) < 15).length;
+    const ageMin = data.updated_at ? Math.max(0, Math.round((Date.now() - Date.parse(data.updated_at)) / 60000)) : null;
+    const ageTxt = ageMin === null ? "" : (ageMin < 1 ? "刚刚" : `${ageMin}m前`);
+    $("l5090StatusChip").textContent = `${idleCount}/${gpus.length} 空闲 · ${ageTxt}`;
+    $("l5090StatusChip").className = idleCount > 0 ? "chip green" : "chip amber";
+    $("l5090Grid").innerHTML = gpus.map(g => {
+      const used = Number(g.vram_used_mb || 0);
+      const tot = Number(g.vram_total_mb || 32607);
+      const pct = Math.min(100, Math.round((used / Math.max(1, tot)) * 100));
+      const util = Number(g.util_pct || 0);
+      const temp = g.temp_c != null ? `${g.temp_c}°C` : "";
+      const busy = used >= 1500 || util >= 15;
+      return `
+        <div class="l5090-card ${busy ? 'busy' : 'idle'}">
+          <div class="l5090-top">
+            <span>GPU ${esc(g.index)} · RTX 5090</span>
+            <span style="color:${busy ? 'var(--amber)' : 'var(--emerald)'}">${busy ? '● 占用中' : '● 空闲可挂载'}</span>
+          </div>
+          <div class="l5090-bar"><i style="width:${pct}%"></i></div>
+          <div class="l5090-sub">
+            <span>${(used/1024).toFixed(1)}/${(tot/1024).toFixed(0)} GB</span>
+            <span>GPU ${util}% ${temp}</span>
+          </div>
+        </div>`;
+    }).join("");
+  } catch (e) {
+    $("l5090Grid").innerHTML = `<div class="empty" style="grid-column:1/-1;padding:10px">读取失败：${esc(e.message)}</div>`;
+  }
+}
+
 function loadAll() {
   if (!TOKEN) return;
   loadWorkflows();
   loadRunpodCatalog();
+  loadLocal5090Gpus();
   refreshOverview();
 }
 

@@ -190,8 +190,16 @@ class ControlPlaneClient:
                 data = str(body).encode("utf-8")
                 headers["Content-Type"] = content_type
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read()
+        last_exc: Exception | None = None
+        for attempt in range(1, 5):
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    return resp.read()
+            except Exception as exc:
+                last_exc = exc
+                if attempt < 4:
+                    time.sleep(2 * attempt)
+        raise last_exc  # type: ignore
 
     def get_json(self, path: str) -> dict:
         return json.loads(self._req("GET", path).decode("utf-8"))
@@ -203,11 +211,20 @@ class ControlPlaneClient:
     def download_asset(self, r2_key: str, dest: Path) -> None:
         dest.parent.mkdir(parents=True, exist_ok=True)
         url = f"{self.base_url}/api/assets/{r2_key.lstrip('/')}"
-        req = urllib.request.Request(
-            url, headers={"Authorization": f"Bearer {self.token}", "User-Agent": "H3UniversalWorker/2.0"}
-        )
-        with urllib.request.urlopen(req, timeout=300) as resp, open(dest, "wb") as f:
-            shutil.copyfileobj(resp, f)
+        last_exc: Exception | None = None
+        for attempt in range(1, 5):
+            try:
+                req = urllib.request.Request(
+                    url, headers={"Authorization": f"Bearer {self.token}", "User-Agent": "H3UniversalWorker/2.0"}
+                )
+                with urllib.request.urlopen(req, timeout=300) as resp, open(dest, "wb") as f:
+                    shutil.copyfileobj(resp, f)
+                return
+            except Exception as exc:
+                last_exc = exc
+                if attempt < 4:
+                    time.sleep(2 * attempt)
+        raise last_exc  # type: ignore
 
     def upload_job_file(self, job_id: str, filename: str, file_path: Path, content_type="application/octet-stream") -> dict:
         url = f"{self.base_url}/api/jobs/{job_id}/upload/{filename}"
@@ -436,7 +453,8 @@ def ensure_models(
             return
 
         print(f"[HF] Downloading {m['repo_id']} :: {m['filename']} (~{m.get('approx_gb', '?')} GB)...")
-        direct_url = f"https://huggingface.co/{m['repo_id']}/resolve/main/{m['filename']}"
+        hf_base = os.environ.get("HF_ENDPOINT", "https://huggingface.co").rstrip("/")
+        direct_url = f"{hf_base}/{m['repo_id']}/resolve/main/{m['filename']}"
         ok = _download_with_aria2(direct_url, dst_file, hf_token)
         if not ok:
             cached_path = hf_hub_download(
@@ -484,7 +502,7 @@ def launch_comfyui_async(comfy_dir: Path, log_path: Path) -> subprocess.Popen:
             sys.executable, "-u", str(comfy_dir / "main.py"),
             "--listen", "127.0.0.1", "--port", "8188",
             "--disable-auto-launch",
-            "--lowvram", "--reserve-vram", "2",
+            "--vram-headroom", "6",
             "--preview-method", "none",
         ],
         cwd=str(comfy_dir),

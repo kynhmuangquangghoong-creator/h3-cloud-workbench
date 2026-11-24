@@ -360,6 +360,32 @@ export default {
       }
     }
 
+    // 2.6 Local 5090 4-GPU live telemetry snapshot (stored in gpu_workers row 'local5090-host')
+    if (path === "/api/local5090/gpus") {
+      if (request.method === "POST") {
+        const b = await request.json();
+        const ts = nowIso();
+        await env.DB.prepare(
+          `INSERT INTO gpu_workers (worker_id, platform, pod_id, state, detail, telemetry_json, last_heartbeat_at)
+           VALUES ('local5090-host', 'local5090', '', 'online', ?, ?, ?)
+           ON CONFLICT(worker_id) DO UPDATE SET
+             state='online', detail=excluded.detail, telemetry_json=excluded.telemetry_json, last_heartbeat_at=excluded.last_heartbeat_at`
+        )
+          .bind(b.detail || "4x RTX 5090 telemetry", JSON.stringify({ gpus: b.gpus || [], host: b.host || "5090" }), ts)
+          .run();
+        return jsonResp({ ok: true, updated_at: ts, count: (b.gpus || []).length });
+      }
+      if (request.method === "GET") {
+        const row = await env.DB.prepare(
+          "SELECT telemetry_json, last_heartbeat_at FROM gpu_workers WHERE worker_id = 'local5090-host'"
+        ).first();
+        if (!row) return jsonResp({ gpus: [], updated_at: null });
+        let tel = {};
+        try { tel = JSON.parse(row.telemetry_json || "{}"); } catch {}
+        return jsonResp({ gpus: tel.gpus || [], updated_at: row.last_heartbeat_at });
+      }
+    }
+
     // 3. Create a new job
     if (request.method === "POST" && path === "/api/jobs") {
       const body = await request.json();
@@ -466,6 +492,11 @@ export default {
         .run();
       if (!res.meta.changes) return jsonResp({ job: null });
 
+      // Read authoritative input keys directly from R2 to avoid read-modify-write races under parallel uploads
+      const listedInputs = await env.GPU_JOBS.list({ prefix: `jobs/${row.id}/input/`, limit: 1000 });
+      const r2InputKeys = (listedInputs.objects || []).map((o) => o.key).sort();
+      const inputKeys = r2InputKeys.length ? r2InputKeys : JSON.parse(row.input_keys_json || "[]");
+
       return jsonResp({
         job: {
           id: row.id,
@@ -474,7 +505,7 @@ export default {
           workflow: row.workflow,
           workflow_version: row.workflow_version,
           params: JSON.parse(row.params_json || "{}"),
-          input_keys: JSON.parse(row.input_keys_json || "[]"),
+          input_keys: inputKeys,
         },
       });
     }
